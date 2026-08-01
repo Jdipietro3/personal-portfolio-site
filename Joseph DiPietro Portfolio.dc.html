@@ -11,6 +11,8 @@
 <body>
 <x-dc>
 <helmet>
+<title>Joseph DiPietro — Computer Science</title>
+<meta name="description" content="Joseph DiPietro — Computer Science student working in systems and AI. Compilers, distributed systems, and machine learning projects.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap">
 <style>
   * { box-sizing: border-box; }
@@ -20,6 +22,14 @@
   ::selection { background: #f8d488; color: #08080a; }
   @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
   @keyframes bounce { 0%, 100% { transform: translate(-50%,0); } 50% { transform: translate(-50%,10px); } }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 </style>
 </helmet>
 <div style="position:relative; background:#08080a; min-height:100vh; color:#f2f1ec; overflow-x:hidden;">
@@ -28,7 +38,8 @@
 
   <!-- FIXED IDENTITY (name shrinks + travels to top-left on scroll) -->
   <div style="{{ nameStyle }}">
-    <pre style="font-family:'JetBrains Mono',monospace; font-weight:800; line-height:1; letter-spacing:0; color:#f2f1ec; white-space:pre; user-select:none; margin:0; font-size:{{ nameFontSize }}px; padding:{{ namePad }}; background:{{ namePlateBg }}; border-radius:4px; text-shadow:0 2px 18px rgba(0,0,0,0.8);">{{ asciiName }}</pre>
+    <pre aria-hidden="true" style="font-family:'JetBrains Mono',monospace; font-weight:800; line-height:1; letter-spacing:0; color:#f2f1ec; white-space:pre; user-select:none; margin:0; font-size:{{ nameFontSize }}px; padding:{{ namePad }}; background:{{ namePlateBg }}; border-radius:4px; text-shadow:0 2px 18px rgba(0,0,0,0.8);">{{ asciiName }}</pre>
+    <h1 class="sr-only">Joseph DiPietro</h1>
   </div>
 
   <div style="{{ subStyle }}">
@@ -78,6 +89,7 @@
     <!-- ABOUT -->
     <section id="about" style="padding:140px 24px 100px; max-width:900px; margin:0 auto;">
       <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.01 // IDENTITY</div>
+      <h2 class="sr-only">About</h2>
       <div style="border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; background:#0e0e11;">
         <div style="display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.08); background:#131316;">
           <div style="width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.15);"></div>
@@ -96,7 +108,7 @@
     <!-- EXPERIENCE -->
     <section id="experience" style="padding:100px 24px; max-width:900px; margin:0 auto;">
       <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.02 // EXPERIENCE</div>
-      <div style="font-size:28px; font-weight:700; margin-bottom:48px;">Work Experience</div>
+      <h2 style="margin-top:0; font-size:28px; font-weight:700; margin-bottom:48px;">Work Experience</h2>
       <div style="position:relative; padding-left:28px; border-left:1px solid rgba(255,255,255,0.12); display:flex; flex-direction:column; gap:44px;">
         <sc-for list="{{ experience }}" as="job" hint-placeholder-count="3">
           <div style="position:relative;">
@@ -124,7 +136,7 @@
     <!-- EDUCATION -->
     <section id="education" style="padding:100px 24px; max-width:900px; margin:0 auto;">
       <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.03 // EDUCATION</div>
-      <div style="font-size:28px; font-weight:700; margin-bottom:48px;">Education</div>
+      <h2 style="margin-top:0; font-size:28px; font-weight:700; margin-bottom:48px;">Education</h2>
       <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:0; border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; background:#0e0e11;">
         <div style="padding:32px; border-right:1px solid rgba(255,255,255,0.08); font-size:13.5px; line-height:2;">
           <div><span style="color:rgba(242,241,236,0.4);">{</span></div>
@@ -154,7 +166,7 @@
     <!-- PROJECTS -->
     <section id="projects" style="padding:100px 24px; max-width:1100px; margin:0 auto;">
       <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.04 // PROJECTS</div>
-      <div style="font-size:28px; font-weight:700; margin-bottom:48px;">Project Work</div>
+      <h2 style="margin-top:0; font-size:28px; font-weight:700; margin-bottom:48px;">Project Work</h2>
       <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:22px;">
         <sc-for list="{{ projects }}" as="proj" hint-placeholder-count="5">
           <div style="border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; background:#0e0e11; display:flex; flex-direction:column;">
@@ -179,7 +191,7 @@
     <!-- SKILLS -->
     <section id="skills" style="padding:100px 24px; max-width:900px; margin:0 auto;">
       <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.05 // SKILLS</div>
-      <div style="font-size:28px; font-weight:700; margin-bottom:12px;">Skills</div>
+      <h2 style="margin-top:0; font-size:28px; font-weight:700; margin-bottom:12px;">Skills</h2>
       <div style="font-size:13.5px; color:rgba(242,241,236,0.5); line-height:1.75; max-width:620px; margin-bottom:34px;">The tools I work in. Where each one was used is on the roles and projects above.</div>
 
       <div style="display:flex; flex-direction:column; gap:34px;">
@@ -199,7 +211,7 @@
     <!-- CONTACT -->
     <section id="contact" style="padding:120px 24px 90px; max-width:900px; margin:0 auto; text-align:center;">
       <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.06 // CONTACT</div>
-      <div style="font-size:32px; font-weight:800; margin-bottom:16px;">&gt;&gt; establish_connection()</div>
+      <h2 style="margin-top:0; font-size:32px; font-weight:800; margin-bottom:16px;">&gt;&gt; establish_connection()</h2>
       <p style="color:rgba(242,241,236,0.55); font-size:14px; margin-bottom:36px;">Channel open. Send a signal, I'll respond.</p>
       <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:56px;">
         <a href="mailto:joseph.dipietro@example.com" style="background:#f8d488; color:#08080a; font-weight:700; font-size:13px; padding:13px 24px; border-radius:999px;">joseph.dipietro@example.com</a>
@@ -238,6 +250,8 @@ class Component extends DCLogic {
     this._time = 0;
     this._geom = null;
     this._mask = null;
+    this._reduceMotion = typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   }
 
   componentDidMount() {
@@ -320,7 +334,8 @@ class Component extends DCLogic {
     const el = document.getElementById(id);
     if (!el) return;
     const y = el.getBoundingClientRect().top + window.scrollY - 90;
-    window.scrollTo({ top: y, behavior: 'smooth' });
+    const smooth = !(this._reduceMotion && this._reduceMotion.matches);
+    window.scrollTo({ top: y, behavior: smooth ? 'smooth' : 'auto' });
   }
 
   startLoop() {
@@ -330,6 +345,19 @@ class Component extends DCLogic {
       if (!canvas || !this._geom || !this._mask) return;
       const geom = this._geom;
       const ctx = canvas.getContext('2d');
+
+      // Respect the OS-level reduce-motion setting. The swirl is a full-viewport field of
+      // moving glyphs — the exact pattern that triggers vestibular symptoms. The name is
+      // DOM, not canvas, so clearing here leaves the hero composed, just static. Read per
+      // frame rather than cached so toggling the OS setting takes effect live, and placed
+      // before the _time advance so returning to motion resumes instead of jumping.
+      if (this._reduceMotion && this._reduceMotion.matches) {
+        if (!this._cleared) {
+          ctx.clearRect(0, 0, geom.w, geom.h);
+          this._cleared = true;
+        }
+        return;
+      }
       this._time += 0.012;
 
       // read scroll directly, not from state — the loop must stay smooth and
