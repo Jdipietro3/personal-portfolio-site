@@ -20,7 +20,6 @@
   ::selection { background: #f8d488; color: #08080a; }
   @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
   @keyframes bounce { 0%, 100% { transform: translate(-50%,0); } 50% { transform: translate(-50%,10px); } }
-  @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(248,212,136,0.4); } 50% { box-shadow: 0 0 0 6px rgba(248,212,136,0); } }
 </style>
 </helmet>
 <div style="position:relative; background:#08080a; min-height:100vh; color:#f2f1ec; overflow-x:hidden;">
@@ -179,34 +178,21 @@
 
     <!-- SKILLS -->
     <section id="skills" style="padding:100px 24px; max-width:900px; margin:0 auto;">
-      <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.05 // NEURAL MAP</div>
-      <div style="font-size:28px; font-weight:700; margin-bottom:12px;">Neural Map</div>
-      <div style="font-size:13px; color:rgba(242,241,236,0.4); margin-bottom:20px;">&gt;&gt; mapping learned pathways...</div>
-      <div style="display:flex; gap:26px; flex-wrap:wrap; margin-bottom:8px;">
-        <sc-for list="{{ ringLabels }}" as="rl" hint-placeholder-count="3">
-          <div style="display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:0.16em; color:rgba(242,241,236,0.6);">
-            <span style="width:8px; height:8px; border-radius:50%; background:{{ rl.color }}; display:inline-block;"></span>{{ rl.title }}
+      <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.05 // SKILLS</div>
+      <div style="font-size:28px; font-weight:700; margin-bottom:12px;">Skills</div>
+      <div style="font-size:13.5px; color:rgba(242,241,236,0.5); line-height:1.75; max-width:620px; margin-bottom:34px;">The tools I work in. Where each one was used is on the roles and projects above.</div>
+
+      <div style="display:flex; flex-direction:column; gap:34px;">
+        <sc-for list="{{ skills }}" as="g" hint-placeholder-count="3">
+          <div>
+            <div style="font-size:11px; letter-spacing:0.18em; color:#f8d488; opacity:0.8; margin-bottom:14px;">{{ g.title }}</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <sc-for list="{{ g.items }}" as="s" hint-placeholder-count="6">
+                <span style="font-size:12px; padding:6px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); color:rgba(242,241,236,0.75);">{{ s }}</span>
+              </sc-for>
+            </div>
           </div>
         </sc-for>
-      </div>
-      <div style="position:relative; width:100%;">
-        <svg viewBox="0 0 640 600" style="width:100%; height:auto; display:block; overflow:visible;">
-          <sc-for list="{{ skillLines }}" as="ln" hint-placeholder-count="16">
-            <line x1="{{ ln.x1 }}" y1="{{ ln.y1 }}" x2="{{ ln.x2 }}" y2="{{ ln.y2 }}" stroke="{{ ln.color }}" stroke-opacity="{{ ln.opacity }}" stroke-width="1"></line>
-          </sc-for>
-          <sc-for list="{{ skillNodes }}" as="node" hint-placeholder-count="16">
-            <circle cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.r }}" fill="#08080a" stroke="{{ node.color }}" stroke-width="1.5"></circle>
-            <circle cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.dotR }}" fill="{{ node.color }}"></circle>
-          </sc-for>
-          <circle cx="320" cy="300" r="30" fill="#08080a" stroke="rgba(242,241,236,0.4)" stroke-width="1"></circle>
-          <text x="320" y="305" text-anchor="middle" fill="rgba(242,241,236,0.6)" font-size="11" font-family="'JetBrains Mono',monospace" letter-spacing="1">CORE</text>
-        </svg>
-        <div style="position:absolute; inset:0; pointer-events:none;">
-          <sc-for list="{{ skillNodes }}" as="node" hint-placeholder-count="16">
-            <div style="position:absolute; left:{{ node.leftPct }}%; top:{{ node.nameTopPct }}%; transform:translate(-50%,-50%); font-size:11px; color:rgba(242,241,236,0.85); white-space:nowrap; text-shadow:0 0 5px #08080a, 0 0 3px #08080a;">{{ node.name }}</div>
-            <div style="position:absolute; left:{{ node.leftPct }}%; top:{{ node.levelTopPct }}%; transform:translate(-50%,-50%); font-size:9.5px; color:rgba(242,241,236,0.45); white-space:nowrap; text-shadow:0 0 5px #08080a, 0 0 3px #08080a;">{{ node.level }}</div>
-          </sc-for>
-        </div>
       </div>
     </section>
 
@@ -216,7 +202,7 @@
       <div style="font-size:32px; font-weight:800; margin-bottom:16px;">&gt;&gt; establish_connection()</div>
       <p style="color:rgba(242,241,236,0.55); font-size:14px; margin-bottom:36px;">Channel open. Send a signal, I'll respond.</p>
       <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:56px;">
-        <a href="mailto:joseph.dipietro@example.com" style="background:#f8d488; color:#08080a; font-weight:700; font-size:13px; padding:13px 24px; border-radius:999px; animation:pulseGlow 2.6s ease-in-out infinite;">joseph.dipietro@example.com</a>
+        <a href="mailto:joseph.dipietro@example.com" style="background:#f8d488; color:#08080a; font-weight:700; font-size:13px; padding:13px 24px; border-radius:999px;">joseph.dipietro@example.com</a>
         <a href="#" style="border:1px solid rgba(242,241,236,0.25); color:#f2f1ec; font-size:13px; padding:13px 24px; border-radius:999px;">GitHub</a>
         <a href="#" style="border:1px solid rgba(242,241,236,0.25); color:#f2f1ec; font-size:13px; padding:13px 24px; border-radius:999px;">LinkedIn</a>
         <a href="#" style="border:1px solid rgba(242,241,236,0.25); color:#f2f1ec; font-size:13px; padding:13px 24px; border-radius:999px;">./resume.pdf</a>
@@ -432,6 +418,9 @@ class Component extends DCLogic {
     }));
 
     const experience = [
+      { range: 'Jan 2025 – Present', role: 'Undergraduate Research Assistant', org: 'Neural Systems Lab', dotColor: '#fff3d0',
+        bullets: ['Trained and evaluated sequence models on a 40M-token internal corpus', 'Built the lab’s experiment-tracking harness, now used by six researchers', 'Co-authored a workshop paper on attention sparsity'],
+        tags: ['Python', 'PyTorch', 'Transformers'] },
       { range: 'Jun 2025 – Aug 2025', role: 'Software Engineering Intern', org: 'Acme Systems', dotColor: '#f8d488',
         bullets: ['Built internal CI tooling that cut average build time by 30%', 'Shipped REST API endpoints consumed by four downstream teams', 'Raised integration test coverage from 62% to 88%'],
         tags: ['Go', 'Docker', 'PostgreSQL'] },
@@ -451,17 +440,11 @@ class Component extends DCLogic {
       { name: 'toylang-compiler', desc: 'Compiler for a C-like toy language: hand-written lexer, parser, and x86 codegen backend.', tags: ['C++', 'LLVM'], link: '#', dotColor: '#f8d488' }
     ];
 
-    const skillGroups = [
-      { title: 'Languages', items: [
-        { name: 'Python', level: 92 }, { name: 'Java', level: 85 }, { name: 'C++', level: 80 },
-        { name: 'TypeScript', level: 88 }, { name: 'Go', level: 70 }, { name: 'SQL', level: 82 }
-      ]},
-      { title: 'Frameworks & Libraries', items: [
-        { name: 'React', level: 86 }, { name: 'Node.js', level: 80 }, { name: 'PyTorch', level: 75 }, { name: 'Express', level: 78 }
-      ]},
-      { title: 'Tools & Platforms', items: [
-        { name: 'Git', level: 90 }, { name: 'Docker', level: 78 }, { name: 'Linux', level: 84 }, { name: 'AWS', level: 65 }
-      ]}
+    // flat skill groups rendered directly as chips
+    const skills = [
+      { title: 'LANGUAGES', items: ['Python', 'TypeScript', 'Go', 'SQL', 'Java', 'C++'] },
+      { title: 'SYSTEMS & INFRASTRUCTURE', items: ['Linux', 'Docker', 'PostgreSQL', 'Redis', 'gRPC', 'AWS'] },
+      { title: 'MACHINE LEARNING', items: ['PyTorch', 'NumPy', 'CUDA', 'Transformers'] }
     ];
 
     const education = {
@@ -527,34 +510,11 @@ class Component extends DCLogic {
       display: this.state.winW < 900 ? 'none' : 'block'
     };
 
-    const cx = 320, cy = 300;
-    const rings = [
-      { title: 'LANGUAGES', radius: 95, items: skillGroups[0].items, color: '#f8d488' },
-      { title: 'FRAMEWORKS', radius: 175, items: skillGroups[1].items, color: '#fff3d0' },
-      { title: 'TOOLS', radius: 250, items: skillGroups[2].items, color: '#f2f1ec' }
-    ];
-    const skillNodes = [], skillLines = [], ringLabels = [];
-    rings.forEach((ring, ringIndex) => {
-      const count = ring.items.length;
-      ring.items.forEach((item, i) => {
-        const angle = (i / count) * Math.PI * 2 - Math.PI / 2 + ringIndex * (Math.PI / count) + ringIndex * 0.35;
-        const x = cx + ring.radius * Math.cos(angle);
-        const y = cy + ring.radius * Math.sin(angle) * 0.78;
-        const r = 4 + (item.level / 100) * 7;
-        skillNodes.push({
-          x, y, r, dotR: r * 0.4, name: item.name, level: item.level + '%', color: ring.color,
-          leftPct: (x / 640) * 100, nameTopPct: ((y - r - 11) / 600) * 100, levelTopPct: ((y + r + 11) / 600) * 100
-        });
-        skillLines.push({ x1: cx, y1: cy, x2: x, y2: y, color: ring.color, opacity: (item.level / 100) * 0.5 + 0.1 });
-      });
-      ringLabels.push({ title: ring.title, color: ring.color });
-    });
-
     return {
       canvasRef: this.canvasRef, heroRef: this.heroRef,
       nameStyle, nameFontSize, namePad, namePlateBg, asciiName, subStyle, taglineOpacity, indicatorOpacity, navPillVars, navOpacity,
       heroSpacerStyle,
-      navItems, experience, projects, skillGroups, education, skillNodes, skillLines, ringLabels,
+      navItems, experience, projects, education, skills,
       netNodes, netEdges, netPulses, netStripStyle, netW, netH
     };
   }
