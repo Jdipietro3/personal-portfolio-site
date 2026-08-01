@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HeroGrid test harness</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    background: #0b0d10;
+    color: #d8dee9;
+    margin: 0;
+    padding: 24px;
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  h1 { font-size: 16px; color: #e5e9f0; margin: 0 0 4px; }
+  h2 { font-size: 13px; color: #88c0d0; margin: 28px 0 8px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .sub { color: #6b7280; margin-bottom: 18px; }
+  pre.grid {
+    background: #14171c;
+    border: 1px solid #262b33;
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    white-space: pre;
+    font-size: 13px;
+    line-height: 1.15;
+  }
+  .glyph-ch { color: #eceff4; }
+  .enc { color: #ebcb8b; font-weight: bold; }
+  .halo { color: #5e81ac; }
+  .blank { color: #3b4048; }
+  .pass { color: #a3be8c; }
+  .fail { color: #bf616a; font-weight: bold; }
+  .summary { font-size: 14px; margin-top: 14px; padding: 8px 12px; border-radius: 6px; display: inline-block; }
+  .summary.ok { background: #2b3a2b; color: #a3be8c; }
+  .summary.bad { background: #3a2b2b; color: #bf616a; }
+  .stat { color: #b48ead; }
+  .legend span { margin-right: 18px; }
+  #assertions div { padding: 1px 0; }
+</style>
+</head>
+<body>
+
+<h1>HeroGrid test harness</h1>
+<div class="sub">Loaded from ./hero-grid.js as a plain script. Never linked from the site.</div>
+
+<h2>Mask map (1440&times;900)</h2>
+<div class="sub legend">
+  <span class="glyph-ch">letters</span>
+  <span class="enc">+ enclosed counter</span>
+  <span class="halo">&middot; halo dilation</span>
+  <span class="blank">&middot; unmasked (dim)</span>
+</div>
+<div id="mapOutput"></div>
+
+<h2>Stats</h2>
+<div id="stats" class="sub"></div>
+
+<h2>Assertions</h2>
+<div id="assertions"></div>
+<div id="summary"></div>
+
+<script src="./hero-grid.js"></script>
+<script>
+(function () {
+  var results = [];
+  function assert(name, cond, expected, actual) {
+    results.push({ name: name, pass: !!cond, expected: expected, actual: actual });
+  }
+
+  var nameRows = HeroGrid.NAME_ASCII.split('\n');
+
+  // ---------- Mask map rendering (1440x900) ----------
+  var geom1440 = HeroGrid.geometry(1440, 900, nameRows);
+  var nameCols = geom1440.nameCols;
+  var nameRowCount = geom1440.nameRowCount;
+  var haloX = HeroGrid.HALO_X;
+  var haloY = HeroGrid.HALO_Y;
+
+  // Build glyph grid (local copy for rendering/independent checks)
+  function buildGlyph(rows, cols, rowCount) {
+    var g = [];
+    for (var r = 0; r < rowCount; r++) {
+      var row = rows[r] || '';
+      var arr = [];
+      for (var c = 0; c < cols; c++) {
+        arr.push((c < row.length ? row[c] : ' ') !== ' ');
+      }
+      g.push(arr);
+    }
+    return g;
+  }
+
+  // Independent flood fill (test's own implementation, not reused from hero-grid.js)
+  function buildEnclosed(glyph, rowCount, cols) {
+    var reached = [];
+    for (var r = 0; r < rowCount; r++) reached.push(new Array(cols).fill(false));
+    var stack = [];
+    function pushIfSpace(r, c) {
+      if (r < 0 || r >= rowCount || c < 0 || c >= cols) return;
+      if (glyph[r][c]) return;
+      if (reached[r][c]) return;
+      reached[r][c] = true;
+      stack.push([r, c]);
+    }
+    for (var c0 = 0; c0 < cols; c0++) { pushIfSpace(0, c0); pushIfSpace(rowCount - 1, c0); }
+    for (var r0 = 0; r0 < rowCount; r0++) { pushIfSpace(r0, 0); pushIfSpace(r0, cols - 1); }
+    while (stack.length) {
+      var cur = stack.pop();
+      pushIfSpace(cur[0] - 1, cur[1]);
+      pushIfSpace(cur[0] + 1, cur[1]);
+      pushIfSpace(cur[0], cur[1] - 1);
+      pushIfSpace(cur[0], cur[1] + 1);
+    }
+    var enclosed = [];
+    for (var r2 = 0; r2 < rowCount; r2++) {
+      var row = [];
+      for (var c2 = 0; c2 < cols; c2++) row.push(!glyph[r2][c2] && !reached[r2][c2]);
+      enclosed.push(row);
+    }
+    return enclosed;
+  }
+
+  var glyph = buildGlyph(nameRows, nameCols, nameRowCount);
+  var enclosed = buildEnclosed(glyph, nameRowCount, nameCols);
+  var mask1440 = HeroGrid.buildMask(nameRows, geom1440);
+
+  // Render the mask map: local rows from -haloY..nameRowCount-1+haloY, cols -haloX..nameCols-1+haloX
+  var minR = -haloY, maxR = nameRowCount - 1 + haloY;
+  var minC = -haloX, maxC = nameCols - 1 + haloX;
+  var mapLines = [];
+  for (var lr = minR; lr <= maxR; lr++) {
+    var line = '';
+    for (var lc = minC; lc <= maxC; lc++) {
+      var inBoundsName = lr >= 0 && lr < nameRowCount && lc >= 0 && lc < nameCols;
+      var isGlyph = inBoundsName && glyph[lr][lc];
+      var isEnc = inBoundsName && enclosed[lr][lc];
+      var canvasRow = geom1440.row0 + lr;
+      var canvasCol = geom1440.col0 + lc;
+      var inMask = (canvasRow >= 0 && canvasRow < geom1440.rows && canvasCol >= 0 && canvasCol < geom1440.cols)
+        ? mask1440.has(canvasRow * geom1440.cols + canvasCol)
+        : false;
+
+      var cls, ch;
+      if (isGlyph) {
+        cls = 'glyph-ch';
+        ch = nameRows[lr][lc];
+      } else if (isEnc) {
+        cls = 'enc';
+        ch = '+';
+      } else if (inMask) {
+        cls = 'halo';
+        ch = '·';
+      } else {
+        cls = 'blank';
+        ch = '·';
+      }
+      line += '<span class="' + cls + '">' + ch + '</span>';
+    }
+    mapLines.push(line);
+  }
+
+  // Print raw NAME_ASCII directly above, aligned to the same column offset (minC may be negative)
+  var rawLines = [];
+  var pad = -minC; // number of leading blank cols before name col 0
+  for (var rr = 0; rr < nameRowCount; rr++) {
+    var raw = nameRows[rr];
+    rawLines.push(' '.repeat(pad) + raw.replace(/ /g, ' '));
+  }
+  // top/bottom halo-only rows in raw view are blank
+  var rawFull = [];
+  for (var i2 = minR; i2 <= maxR; i2++) {
+    if (i2 >= 0 && i2 < nameRowCount) rawFull.push(rawLines[i2]);
+    else rawFull.push('');
+  }
+
+  document.getElementById('mapOutput').innerHTML =
+    '<div class="sub">Raw NAME_ASCII (padded to align with mask map below):</div>' +
+    '<pre class="grid">' + rawFull.join('\n') + '</pre>' +
+    '<div class="sub">Mask map (name-local region expanded by halo):</div>' +
+    '<pre class="grid">' + mapLines.join('\n') + '</pre>';
+
+  var glyphCount = 0;
+  for (var gr = 0; gr < nameRowCount; gr++) for (var gc = 0; gc < nameCols; gc++) if (glyph[gr][gc]) glyphCount++;
+  var encCount = 0;
+  for (var er = 0; er < nameRowCount; er++) for (var ec = 0; ec < nameCols; ec++) if (enclosed[er][ec]) encCount++;
+
+  document.getElementById('stats').innerHTML =
+    'glyph cells: <span class="stat">' + glyphCount + '</span> &middot; ' +
+    'enclosed-counter cells: <span class="stat">' + encCount + '</span> &middot; ' +
+    'mask cells (canvas, 1440x900): <span class="stat">' + mask1440.size + '</span> &middot; ' +
+    'grid: <span class="stat">' + geom1440.cols + 'x' + geom1440.rows + '</span> = ' + (geom1440.cols * geom1440.rows) + ' cells';
+
+  // ---------- Assertions ----------
+
+  // 1. geometry at 1440x900
+  assert('geometry(1440,900) fontSize === 18', geom1440.fontSize === 18, 18, geom1440.fontSize);
+  assert('geometry(1440,900) col0 is integer', Number.isInteger(geom1440.col0), 'integer', geom1440.col0);
+  assert('geometry(1440,900) row0 is integer', Number.isInteger(geom1440.row0), 'integer', geom1440.row0);
+  assert('geometry(1440,900) col0 >= 0', geom1440.col0 >= 0, '>=0', geom1440.col0);
+  assert('geometry(1440,900) row0 >= 0', geom1440.row0 >= 0, '>=0', geom1440.row0);
+  assert('geometry(1440,900) cellW === 10.8', Math.abs(geom1440.cellW - 10.8) < 1e-9, 10.8, geom1440.cellW);
+  assert('geometry(1440,900) cellH === 18', geom1440.cellH === 18, 18, geom1440.cellH);
+
+  // 2. geometry at 1280x720 and 500x800
+  var geom1280 = HeroGrid.geometry(1280, 720, nameRows);
+  assert('geometry(1280,720) col0 is integer', Number.isInteger(geom1280.col0), 'integer', geom1280.col0);
+  assert('geometry(1280,720) row0 is integer', Number.isInteger(geom1280.row0), 'integer', geom1280.row0);
+  assert('geometry(1280,720) col0 >= 0', geom1280.col0 >= 0, '>=0', geom1280.col0);
+  assert('geometry(1280,720) row0 >= 0', geom1280.row0 >= 0, '>=0', geom1280.row0);
+
+  var geom500 = HeroGrid.geometry(500, 800, nameRows);
+  assert('geometry(500,800) col0 is integer', Number.isInteger(geom500.col0), 'integer', geom500.col0);
+  assert('geometry(500,800) row0 is integer', Number.isInteger(geom500.row0), 'integer', geom500.row0);
+  assert('geometry(500,800) col0 >= 0', geom500.col0 >= 0, '>=0', geom500.col0);
+  assert('geometry(500,800) row0 >= 0', geom500.row0 >= 0, '>=0', geom500.row0);
+  assert('geometry(500,800) fontSize < 18 (narrow guard)', geom500.fontSize < 18, '<18', geom500.fontSize);
+  assert('geometry(500,800) nameCols*cellW <= 500', geom500.nameCols * geom500.cellW <= 500, '<=500', geom500.nameCols * geom500.cellW);
+
+  // 3. mask superset of glyph cells
+  var glyphSuperset = true, glyphFailExample = null;
+  for (var r3 = 0; r3 < nameRowCount && glyphSuperset; r3++) {
+    for (var c3 = 0; c3 < nameCols; c3++) {
+      if (!glyph[r3][c3]) continue;
+      var canvasRow3 = geom1440.row0 + r3, canvasCol3 = geom1440.col0 + c3;
+      var key3 = canvasRow3 * geom1440.cols + canvasCol3;
+      if (!mask1440.has(key3)) { glyphSuperset = false; glyphFailExample = [r3, c3]; break; }
+    }
+  }
+  assert('mask is superset of glyph cells', glyphSuperset, 'all glyph cells in mask', glyphSuperset ? 'ok' : 'missing at ' + JSON.stringify(glyphFailExample));
+
+  // 4. every enclosed cell is in the mask
+  var encSuperset = true, encFailExample = null;
+  for (var r4 = 0; r4 < nameRowCount && encSuperset; r4++) {
+    for (var c4 = 0; c4 < nameCols; c4++) {
+      if (!enclosed[r4][c4]) continue;
+      var canvasRow4 = geom1440.row0 + r4, canvasCol4 = geom1440.col0 + c4;
+      var key4 = canvasRow4 * geom1440.cols + canvasCol4;
+      if (!mask1440.has(key4)) { encSuperset = false; encFailExample = [r4, c4]; break; }
+    }
+  }
+  assert('mask is superset of enclosed-counter cells', encSuperset, 'all enclosed cells in mask', encSuperset ? 'ok' : 'missing at ' + JSON.stringify(encFailExample));
+
+  // 5. halo bound: every masked cell within HALO_X/HALO_Y of nearest blocked cell
+  var blockedLocal = [];
+  for (var br = 0; br < nameRowCount; br++) {
+    for (var bc = 0; bc < nameCols; bc++) {
+      if (glyph[br][bc] || enclosed[br][bc]) blockedLocal.push([br, bc]);
+    }
+  }
+  var haloOk = true, haloFailExample = null;
+  mask1440.forEach(function (key) {
+    if (!haloOk) return;
+    var canvasRow = Math.floor(key / geom1440.cols);
+    var canvasCol = key % geom1440.cols;
+    var lr = canvasRow - geom1440.row0;
+    var lc = canvasCol - geom1440.col0;
+    var within = false;
+    for (var i = 0; i < blockedLocal.length; i++) {
+      var br2 = blockedLocal[i][0], bc2 = blockedLocal[i][1];
+      if (Math.abs(lr - br2) <= haloY && Math.abs(lc - bc2) <= haloX) { within = true; break; }
+    }
+    if (!within) { haloOk = false; haloFailExample = { canvasRow: canvasRow, canvasCol: canvasCol, lr: lr, lc: lc }; }
+  });
+  assert('every masked cell within HALO_X/HALO_Y of a blocked cell', haloOk, 'within halo bound', haloOk ? 'ok' : JSON.stringify(haloFailExample));
+
+  // 6. mask cells within grid bounds
+  var boundsOk = true, boundsFailExample = null;
+  mask1440.forEach(function (key) {
+    if (!boundsOk) return;
+    var canvasRow = Math.floor(key / geom1440.cols);
+    var canvasCol = key % geom1440.cols;
+    if (canvasRow < 0 || canvasRow >= geom1440.rows || canvasCol < 0 || canvasCol >= geom1440.cols) {
+      boundsOk = false;
+      boundsFailExample = { canvasRow: canvasRow, canvasCol: canvasCol };
+    }
+  });
+  assert('all mask cells within 0<=row<rows, 0<=col<cols', boundsOk, 'in bounds', boundsOk ? 'ok' : JSON.stringify(boundsFailExample));
+
+  // 7. mask size sanity
+  var totalCells = geom1440.rows * geom1440.cols;
+  assert('mask size > glyph count', mask1440.size > glyphCount, '>' + glyphCount, mask1440.size);
+  assert('mask size < 40% of rows*cols', mask1440.size < 0.4 * totalCells, '<' + (0.4 * totalCells).toFixed(0), mask1440.size);
+
+  // 8. HALO_X=0, HALO_Y=0 => mask exactly glyph-plus-enclosed
+  var savedHaloX = HeroGrid.HALO_X, savedHaloY = HeroGrid.HALO_Y;
+  HeroGrid.HALO_X = 0;
+  HeroGrid.HALO_Y = 0;
+  var maskZeroHalo = HeroGrid.buildMask(nameRows, geom1440);
+  var expectedZeroHalo = new Set();
+  for (var zr = 0; zr < nameRowCount; zr++) {
+    for (var zc = 0; zc < nameCols; zc++) {
+      if (glyph[zr][zc] || enclosed[zr][zc]) {
+        var cRow = geom1440.row0 + zr, cCol = geom1440.col0 + zc;
+        if (cRow >= 0 && cRow < geom1440.rows && cCol >= 0 && cCol < geom1440.cols) {
+          expectedZeroHalo.add(cRow * geom1440.cols + cCol);
+        }
+      }
+    }
+  }
+  var zeroHaloEqual = maskZeroHalo.size === expectedZeroHalo.size;
+  if (zeroHaloEqual) {
+    expectedZeroHalo.forEach(function (k) { if (!maskZeroHalo.has(k)) zeroHaloEqual = false; });
+  }
+  assert('HALO_X=0,HALO_Y=0 mask === glyph+enclosed exactly', zeroHaloEqual,
+    'size ' + expectedZeroHalo.size, 'size ' + maskZeroHalo.size + (zeroHaloEqual ? ' (match)' : ' (mismatch)'));
+  HeroGrid.HALO_X = savedHaloX;
+  HeroGrid.HALO_Y = savedHaloY;
+
+  // 9. The field is bounded: offset it past its own radius and no cell draws, even with
+  // swirlAlpha pinned at 1. Production no longer translates the field (the swirl fades
+  // in place), but sample()'s offset parameter is still the thing that proves the
+  // falloff actually terminates rather than trailing off forever.
+  // (The field is wider than the viewport diagonal, so at rest NO on-screen cell is
+  // outside it — testing a screen corner would assert nothing.)
+  var fullRise = geom1440.h * 0.5 + HeroGrid.maxDist(geom1440);
+  var survivor = null;
+  for (var frR = 0; frR < geom1440.rows && !survivor; frR++) {
+    for (var frC = 0; frC < geom1440.cols; frC++) {
+      if (HeroGrid.sample(frC, frR, geom1440, fullRise, 0, 1)) { survivor = '(' + frC + ',' + frR + ')'; break; }
+    }
+  }
+  assert('sample() null for every cell at full rise (geometry alone, alpha=1)', survivor === null,
+    'no cell draws', survivor ? 'cell ' + survivor + ' still draws' : 'no cell draws');
+
+  // 10. sample near center is non-null with alpha > 0
+  var centerCol = Math.round(geom1440.cols / 2);
+  var centerRow = Math.round(geom1440.rows / 2);
+  var centerResult = HeroGrid.sample(centerCol, centerRow, geom1440, 0, 0, 1);
+  assert('sample() near center is non-null with alpha>0', centerResult !== null && centerResult.alpha > 0,
+    'non-null, alpha>0', JSON.stringify(centerResult));
+
+  // 11. swirlAlpha=0 => null everywhere on a 20x20 stride
+  var allNullAtZeroAlpha = true, zeroAlphaFailAt = null;
+  for (var scol = 0; scol < geom1440.cols; scol += 20) {
+    for (var srow = 0; srow < geom1440.rows; srow += 20) {
+      var res = HeroGrid.sample(scol, srow, geom1440, 0, 0, 0);
+      if (res !== null) { allNullAtZeroAlpha = false; zeroAlphaFailAt = [scol, srow]; break; }
+    }
+    if (!allNullAtZeroAlpha) break;
+  }
+  assert('swirlAlpha=0 => null for all sampled cells (20x20 stride)', allNullAtZeroAlpha, 'null everywhere', allNullAtZeroAlpha ? 'ok' : 'non-null at ' + JSON.stringify(zeroAlphaFailAt));
+
+  // 12. shape-preserving translation
+  var geomT = geom1440;
+  var rise25 = geomT.cellH * 25;
+  var testTime = 7.3; // arbitrary fixed time
+  var pairsChecked = 0, pairsMatchedAlpha = 0, pairsMatchedCh = 0, chSkippedTokenDiff = 0;
+  var translationOk = true, translationFailExample = null;
+  for (var tcol = 0; tcol < geomT.cols; tcol += 7) {
+    for (var trow = 0; trow < geomT.rows; trow += 7) {
+      if (trow + 25 >= geomT.rows) continue;
+      var a = HeroGrid.sample(tcol, trow, geomT, rise25, testTime, 1);
+      var b = HeroGrid.sample(tcol, trow + 25, geomT, 0, testTime, 1);
+      if (a === null || b === null) continue;
+      pairsChecked++;
+      var alphaMatch = Math.abs(a.alpha - b.alpha) < 1e-9;
+      if (alphaMatch) pairsMatchedAlpha++; else {
+        translationOk = false;
+        if (!translationFailExample) translationFailExample = { tcol: tcol, trow: trow, a: a, b: b, reason: 'alpha mismatch' };
+      }
+      // ch may legitimately differ only via the token easter egg, whose (col+row*3+floor(time*3))%37
+      // term depends on row (which differs by 25 between the two calls, plus rise doesn't affect the
+      // token condition at all — it's purely a function of col/row/time). So token selection can differ
+      // between the two rows even though the underlying swirl field value matches.
+      var aIsToken = HeroGrid.TOKENS.indexOf(a.ch) !== -1;
+      var bIsToken = HeroGrid.TOKENS.indexOf(b.ch) !== -1;
+      if (aIsToken || bIsToken) {
+        chSkippedTokenDiff++;
+      } else {
+        if (a.ch === b.ch) pairsMatchedCh++;
+        else {
+          translationOk = false;
+          if (!translationFailExample) translationFailExample = { tcol: tcol, trow: trow, a: a, b: b, reason: 'ch mismatch (non-token)' };
+        }
+      }
+    }
+  }
+  var chComparable = pairsChecked - chSkippedTokenDiff;
+  assert(
+    'shape-preserving translation: sample(col,row,rise=25rows) matches sample(col,row+25,rise=0) [' +
+      pairsChecked + ' pairs checked, alpha match ' + pairsMatchedAlpha + '/' + pairsChecked +
+      ', ch match ' + pairsMatchedCh + '/' + chComparable + ' non-token pairs, ' + chSkippedTokenDiff + ' skipped for ch (token easter egg)]',
+    translationOk && pairsChecked > 0,
+    'all alpha within 1e-9, all non-token ch equal',
+    translationOk ? 'ok' : JSON.stringify(translationFailExample)
+  );
+
+  // ---------- Render assertions + summary ----------
+  var passCount = 0, failCount = 0;
+  var out = document.getElementById('assertions');
+  results.forEach(function (res) {
+    var div = document.createElement('div');
+    if (res.pass) {
+      passCount++;
+      div.innerHTML = '<span class="pass">PASS</span> — ' + res.name;
+    } else {
+      failCount++;
+      div.innerHTML = '<span class="fail">FAIL</span> — ' + res.name +
+        '<br>&nbsp;&nbsp;expected: ' + res.expected + ' &nbsp; actual: ' + res.actual;
+    }
+    out.appendChild(div);
+  });
+
+  var summaryEl = document.getElementById('summary');
+  var summaryText = passCount + ' passed, ' + failCount + ' failed';
+  summaryEl.innerHTML = '<div class="summary ' + (failCount === 0 ? 'ok' : 'bad') + '">' + summaryText + '</div>';
+  document.title = failCount === 0 ? 'PASS' : 'FAIL';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- hero-grid.js must load BEFORE support.js: support.js can bootstrap the first render
+     immediately, and renderVals() reads HeroGrid on that very first pass. -->
+<script src="./hero-grid.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #08080a; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; -webkit-font-smoothing: antialiased; }
+  a { color: #f8d488; text-decoration: none; }
+  a:hover { color: #ffb37a; }
+  ::selection { background: #f8d488; color: #08080a; }
+  @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  @keyframes bounce { 0%, 100% { transform: translate(-50%,0); } 50% { transform: translate(-50%,10px); } }
+  @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(248,212,136,0.4); } 50% { box-shadow: 0 0 0 6px rgba(248,212,136,0); } }
+</style>
+</helmet>
+<div style="position:relative; background:#08080a; min-height:100vh; color:#f2f1ec; overflow-x:hidden;">
+
+  <canvas ref="{{ canvasRef }}" style="position:fixed; inset:0; z-index:0; display:block; pointer-events:none;"></canvas>
+
+  <!-- FIXED IDENTITY (name shrinks + travels to top-left on scroll) -->
+  <div style="{{ nameStyle }}">
+    <pre style="font-family:'JetBrains Mono',monospace; font-weight:800; line-height:1; letter-spacing:0; color:#f2f1ec; white-space:pre; user-select:none; margin:0; font-size:{{ nameFontSize }}px; padding:{{ namePad }}; background:{{ namePlateBg }}; border-radius:4px; text-shadow:0 2px 18px rgba(0,0,0,0.8);">{{ asciiName }}</pre>
+  </div>
+
+  <div style="{{ subStyle }}">
+    <div style="display:flex; flex-direction:column; align-items:center; gap:22px;">
+      <div style="font-size:15px; color:#f2f1ec; letter-spacing:0.08em; white-space:nowrap; background:rgba(10,10,13,0.9); backdrop-filter:blur(7px); border:1px solid rgba(255,255,255,0.07); border-radius:999px; padding:9px 20px;">&gt;&gt; class: computer_science <span style="color:#f8d488;">//</span> track: systems + AI</div>
+      <div style="display:flex; gap:14px; flex-wrap:nowrap;">
+        <a href="#contact" style="background:#f8d488; color:#08080a; font-weight:700; font-size:13px; padding:12px 22px; border-radius:999px; letter-spacing:0.03em; white-space:nowrap;">./resume.pdf</a>
+        <a href="#projects" style="border:1px solid rgba(242,241,236,0.4); background:rgba(8,8,10,0.55); backdrop-filter:blur(6px); color:#f2f1ec; font-size:13px; padding:12px 22px; border-radius:999px; letter-spacing:0.03em; white-space:nowrap; text-shadow:0 1px 6px rgba(0,0,0,0.8);">view projects</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEURAL LAYER STRIP (scroll traverses the network) -->
+  <div style="{{ netStripStyle }}">
+    <svg width="{{ netW }}" height="{{ netH }}" style="display:block;">
+      <sc-for list="{{ netEdges }}" as="e" hint-placeholder-count="20">
+        <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" stroke="{{ e.stroke }}" stroke-opacity="{{ e.opacity }}" stroke-width="0.75"></line>
+      </sc-for>
+      <sc-for list="{{ netPulses }}" as="s" hint-placeholder-count="0">
+        <line x1="{{ s.x1 }}" y1="{{ s.y1 }}" x2="{{ s.x2 }}" y2="{{ s.y2 }}" stroke="#f8d488" stroke-opacity="{{ s.opacity }}" stroke-width="1.1" stroke-linecap="round"></line>
+      </sc-for>
+      <sc-for list="{{ netNodes }}" as="n" hint-placeholder-count="20">
+        <circle cx="{{ n.x }}" cy="{{ n.y }}" r="{{ n.glowR }}" fill="{{ n.glowFill }}"></circle>
+        <circle cx="{{ n.x }}" cy="{{ n.y }}" r="{{ n.r }}" fill="{{ n.fill }}"></circle>
+      </sc-for>
+    </svg>
+  </div>
+
+  <!-- FLOATING NAV PILL -->
+  <div style="position:fixed; top:22px; right:24px; z-index:80; display:flex; align-items:center; gap:2px; background:rgba(16,16,18,0.75); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:6px 6px 6px 16px; {{ navPillVars }}" data-nav-style="{{ navOpacity }}">
+    <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="6">
+      <a href="{{ item.href }}" onClick="{{ item.onClick }}" style="padding:8px 13px; border-radius:999px; font-size:12.5px; letter-spacing:0.03em; color:{{ item.color }}; background:{{ item.bg }};">{{ item.label }}</a>
+    </sc-for>
+    <a href="#contact" style="margin-left:6px; background:#f8d488; color:#08080a; font-weight:700; font-size:12px; padding:8px 16px; border-radius:999px;">Resume</a>
+  </div>
+
+  <!-- HERO -->
+  <section ref="{{ heroRef }}" style="{{ heroSpacerStyle }}">
+    <div style="position:fixed; bottom:36px; left:50%; transform:translate(-50%,0); animation:bounce 2.2s ease-in-out infinite; opacity:{{ indicatorOpacity }}; z-index:5; text-align:center; background:rgba(10,10,13,0.9); backdrop-filter:blur(7px); border:1px solid rgba(255,255,255,0.07); border-radius:999px; padding:10px 18px 8px;">
+      <div style="font-size:11px; color:rgba(242,241,236,0.55); letter-spacing:0.15em; margin-bottom:4px;">SCROLL</div>
+      <div style="color:rgba(242,241,236,0.55); font-size:16px; line-height:1;">↓</div>
+    </div>
+  </section>
+
+  <div style="position:relative; z-index:10; background:#08080a;">
+
+    <!-- ABOUT -->
+    <section id="about" style="padding:140px 24px 100px; max-width:900px; margin:0 auto;">
+      <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.01 // IDENTITY</div>
+      <div style="border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; background:#0e0e11;">
+        <div style="display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.08); background:#131316;">
+          <div style="width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.15);"></div>
+          <div style="width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.15);"></div>
+          <div style="width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.15);"></div>
+          <div style="margin-left:10px; font-size:12px; color:rgba(242,241,236,0.4);">identity.log</div>
+        </div>
+        <div style="padding:32px; font-size:15px; line-height:1.9;">
+          <div style="color:#fff3d0;">&gt;&gt; scanning subject: joseph_dipietro...</div>
+          <p style="margin:14px 0 0; color:rgba(242,241,236,0.85);">A Computer Science mind drawn to the systems underneath other systems — compilers, distributed protocols, and the models that learn from them. Not much interested in the surface. More interested in what's running underneath it.</p>
+          <p style="margin:18px 0 0; color:rgba(242,241,236,0.5); font-size:13px;">&gt;&gt; status: active_process · TA — Data Structures &amp; Algorithms · signal open for summer '27<span style="animation:blink 1.1s step-end infinite; color:#f8d488;">_</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- EXPERIENCE -->
+    <section id="experience" style="padding:100px 24px; max-width:900px; margin:0 auto;">
+      <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.02 // EXPERIENCE</div>
+      <div style="font-size:28px; font-weight:700; margin-bottom:48px;">Work Experience</div>
+      <div style="position:relative; padding-left:28px; border-left:1px solid rgba(255,255,255,0.12); display:flex; flex-direction:column; gap:44px;">
+        <sc-for list="{{ experience }}" as="job" hint-placeholder-count="3">
+          <div style="position:relative;">
+            <div style="position:absolute; left:-33.5px; top:4px; width:9px; height:9px; border-radius:50%; background:{{ job.dotColor }}; box-shadow:0 0 0 4px #08080a;"></div>
+            <div style="font-size:11.5px; color:rgba(242,241,236,0.45); letter-spacing:0.06em; margin-bottom:6px;">{{ job.range }}</div>
+            <div style="font-size:17px; font-weight:700; color:#f2f1ec;">{{ job.role }}</div>
+            <div style="font-size:13.5px; color:{{ job.dotColor }}; margin-bottom:12px;">{{ job.org }}</div>
+            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">
+              <sc-for list="{{ job.bullets }}" as="b" hint-placeholder-count="3">
+                <div style="font-size:14px; color:rgba(242,241,236,0.75); line-height:1.6; padding-left:16px; position:relative;">
+                  <span style="position:absolute; left:0; color:rgba(242,241,236,0.3);">›</span>{{ b }}
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <sc-for list="{{ job.tags }}" as="tag" hint-placeholder-count="3">
+                <span style="font-size:11px; padding:4px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.12); color:rgba(242,241,236,0.55);">{{ tag }}</span>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- EDUCATION -->
+    <section id="education" style="padding:100px 24px; max-width:900px; margin:0 auto;">
+      <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.03 // EDUCATION</div>
+      <div style="font-size:28px; font-weight:700; margin-bottom:48px;">Education</div>
+      <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:0; border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; background:#0e0e11;">
+        <div style="padding:32px; border-right:1px solid rgba(255,255,255,0.08); font-size:13.5px; line-height:2;">
+          <div><span style="color:rgba(242,241,236,0.4);">{</span></div>
+          <div style="padding-left:20px;"><span style="color:#fff3d0;">"institution"</span>: <span style="color:#f8d488;">"{{ education.institution }}"</span>,</div>
+          <div style="padding-left:20px;"><span style="color:#fff3d0;">"degree"</span>: <span style="color:#f8d488;">"{{ education.degree }}"</span>,</div>
+          <div style="padding-left:20px;"><span style="color:#fff3d0;">"focus"</span>: <span style="color:#f8d488;">"{{ education.focus }}"</span>,</div>
+          <div style="padding-left:20px;"><span style="color:#fff3d0;">"graduation"</span>: <span style="color:#f8d488;">"{{ education.graduation }}"</span>,</div>
+          <div style="padding-left:20px;"><span style="color:#fff3d0;">"coursework"</span>: [</div>
+          <sc-for list="{{ education.coursework }}" as="c" hint-placeholder-count="6">
+            <div style="padding-left:40px;"><span style="color:#f8d488;">"{{ c }}"</span>,</div>
+          </sc-for>
+          <div style="padding-left:20px;">]</div>
+          <div><span style="color:rgba(242,241,236,0.4);">}</span></div>
+        </div>
+        <div style="padding:32px; display:flex; flex-direction:column; justify-content:center; gap:10px;">
+          <div style="font-size:12px; color:rgba(242,241,236,0.45); letter-spacing:0.06em;">GPA</div>
+          <div style="display:flex; align-items:baseline; gap:8px;">
+            <div style="font-size:34px; font-weight:800; color:#f2f1ec;">{{ education.gpa }}</div>
+          </div>
+          <div style="height:8px; border-radius:4px; background:rgba(255,255,255,0.08); overflow:hidden; margin-top:6px;">
+            <div style="height:100%; width:{{ education.gpaPct }}%; background:linear-gradient(90deg,#f8d488,#fff3d0); border-radius:4px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROJECTS -->
+    <section id="projects" style="padding:100px 24px; max-width:1100px; margin:0 auto;">
+      <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.04 // PROJECTS</div>
+      <div style="font-size:28px; font-weight:700; margin-bottom:48px;">Project Work</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:22px;">
+        <sc-for list="{{ projects }}" as="proj" hint-placeholder-count="5">
+          <div style="border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; background:#0e0e11; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid rgba(255,255,255,0.08); background:#131316;">
+              <div style="width:8px; height:8px; border-radius:50%; background:{{ proj.dotColor }};"></div>
+              <div style="font-size:12px; color:rgba(242,241,236,0.5);">{{ proj.name }}</div>
+            </div>
+            <div style="padding:22px; display:flex; flex-direction:column; gap:16px; flex:1;">
+              <div style="font-size:14px; color:rgba(242,241,236,0.75); line-height:1.6; flex:1;">{{ proj.desc }}</div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <sc-for list="{{ proj.tags }}" as="tag" hint-placeholder-count="3">
+                  <span style="font-size:10.5px; padding:4px 9px; border-radius:5px; border:1px solid rgba(255,255,255,0.12); color:rgba(242,241,236,0.55);">{{ tag }}</span>
+                </sc-for>
+              </div>
+              <a href="{{ proj.link }}" style="font-size:13px; color:{{ proj.dotColor }}; font-weight:600;">view source →</a>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- SKILLS -->
+    <section id="skills" style="padding:100px 24px; max-width:900px; margin:0 auto;">
+      <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.05 // NEURAL MAP</div>
+      <div style="font-size:28px; font-weight:700; margin-bottom:12px;">Neural Map</div>
+      <div style="font-size:13px; color:rgba(242,241,236,0.4); margin-bottom:20px;">&gt;&gt; mapping learned pathways...</div>
+      <div style="display:flex; gap:26px; flex-wrap:wrap; margin-bottom:8px;">
+        <sc-for list="{{ ringLabels }}" as="rl" hint-placeholder-count="3">
+          <div style="display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:0.16em; color:rgba(242,241,236,0.6);">
+            <span style="width:8px; height:8px; border-radius:50%; background:{{ rl.color }}; display:inline-block;"></span>{{ rl.title }}
+          </div>
+        </sc-for>
+      </div>
+      <div style="position:relative; width:100%;">
+        <svg viewBox="0 0 640 600" style="width:100%; height:auto; display:block; overflow:visible;">
+          <sc-for list="{{ skillLines }}" as="ln" hint-placeholder-count="16">
+            <line x1="{{ ln.x1 }}" y1="{{ ln.y1 }}" x2="{{ ln.x2 }}" y2="{{ ln.y2 }}" stroke="{{ ln.color }}" stroke-opacity="{{ ln.opacity }}" stroke-width="1"></line>
+          </sc-for>
+          <sc-for list="{{ skillNodes }}" as="node" hint-placeholder-count="16">
+            <circle cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.r }}" fill="#08080a" stroke="{{ node.color }}" stroke-width="1.5"></circle>
+            <circle cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.dotR }}" fill="{{ node.color }}"></circle>
+          </sc-for>
+          <circle cx="320" cy="300" r="30" fill="#08080a" stroke="rgba(242,241,236,0.4)" stroke-width="1"></circle>
+          <text x="320" y="305" text-anchor="middle" fill="rgba(242,241,236,0.6)" font-size="11" font-family="'JetBrains Mono',monospace" letter-spacing="1">CORE</text>
+        </svg>
+        <div style="position:absolute; inset:0; pointer-events:none;">
+          <sc-for list="{{ skillNodes }}" as="node" hint-placeholder-count="16">
+            <div style="position:absolute; left:{{ node.leftPct }}%; top:{{ node.nameTopPct }}%; transform:translate(-50%,-50%); font-size:11px; color:rgba(242,241,236,0.85); white-space:nowrap; text-shadow:0 0 5px #08080a, 0 0 3px #08080a;">{{ node.name }}</div>
+            <div style="position:absolute; left:{{ node.leftPct }}%; top:{{ node.levelTopPct }}%; transform:translate(-50%,-50%); font-size:9.5px; color:rgba(242,241,236,0.45); white-space:nowrap; text-shadow:0 0 5px #08080a, 0 0 3px #08080a;">{{ node.level }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section id="contact" style="padding:120px 24px 90px; max-width:900px; margin:0 auto; text-align:center;">
+      <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.06 // CONTACT</div>
+      <div style="font-size:32px; font-weight:800; margin-bottom:16px;">&gt;&gt; establish_connection()</div>
+      <p style="color:rgba(242,241,236,0.55); font-size:14px; margin-bottom:36px;">Channel open. Send a signal, I'll respond.</p>
+      <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:56px;">
+        <a href="mailto:joseph.dipietro@example.com" style="background:#f8d488; color:#08080a; font-weight:700; font-size:13px; padding:13px 24px; border-radius:999px; animation:pulseGlow 2.6s ease-in-out infinite;">joseph.dipietro@example.com</a>
+        <a href="#" style="border:1px solid rgba(242,241,236,0.25); color:#f2f1ec; font-size:13px; padding:13px 24px; border-radius:999px;">GitHub</a>
+        <a href="#" style="border:1px solid rgba(242,241,236,0.25); color:#f2f1ec; font-size:13px; padding:13px 24px; border-radius:999px;">LinkedIn</a>
+        <a href="#" style="border:1px solid rgba(242,241,236,0.25); color:#f2f1ec; font-size:13px; padding:13px 24px; border-radius:999px;">./resume.pdf</a>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:24px; font-size:11.5px; color:rgba(242,241,236,0.3);">© 2026 Joseph DiPietro — built from scratch, compiled with care.</div>
+    </section>
+
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const NAME_ASCII = [
+  "     __                  __     ___  _ ___  _     __         ",
+  " __ / /__  ___ ___ ___  / /    / _ \\(_) _ \\(_)__ / /________ ",
+  "/ // / _ \\(_-</ -_) _ \\/ _ \\  / // / / ___/ / -_) __/ __/ _ \\",
+  "\\___/\\___/___/\\__/ .__/_//_/ /____/_/_/  /_/\\__/\\__/_/  \\___/",
+  "                /_/                                          "
+].join('\n');
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.canvasRef = React.createRef();
+    this.heroRef = React.createRef();
+    this.state = {
+      scrollY: 0,
+      winW: typeof window !== 'undefined' ? window.innerWidth : 1440,
+      winH: typeof window !== 'undefined' ? window.innerHeight : 900,
+      active: 'about'
+    };
+    this._time = 0;
+    this._geom = null;
+    this._mask = null;
+  }
+
+  componentDidMount() {
+    this.onScroll = () => {
+      this.setState({ scrollY: window.scrollY, flow: this.computeFlow() });
+      this.updateActive();
+    };
+    this.onResize = () => {
+      this.setState({ winW: window.innerWidth, winH: window.innerHeight });
+      this.sizeCanvas();
+    };
+    window.addEventListener('scroll', this.onScroll, { passive: true });
+    window.addEventListener('resize', this.onResize);
+    this.sizeCanvas();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.sizeCanvas());
+    this.startLoop();
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('scroll', this.onScroll);
+    window.removeEventListener('resize', this.onResize);
+    if (this._raf) cancelAnimationFrame(this._raf);
+  }
+
+  sizeCanvas() {
+    const c = this.canvasRef.current;
+    if (!c) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._geom = HeroGrid.geometry(w, h, NAME_ASCII.split('\n'));
+    this._mask = HeroGrid.buildMask(NAME_ASCII.split('\n'), this._geom);
+  }
+
+  computeFlow() {
+    const ids = ['about', 'experience', 'education', 'projects', 'skills', 'contact'];
+    const anchors = ids.map((id) => {
+      const el = document.getElementById(id);
+      return el ? el.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.4 : null;
+    });
+    if (anchors.some((a) => a === null)) return this.state.flow || 0;
+    const y = window.scrollY;
+    if (y <= anchors[0]) return 0;
+    for (let i = 0; i < anchors.length - 1; i++) {
+      if (y < anchors[i + 1]) {
+        const span = Math.max(1, anchors[i + 1] - anchors[i]);
+        return i + (y - anchors[i]) / span;
+      }
+    }
+    return anchors.length - 1;
+  }
+
+  updateActive() {
+    const ids = ['about', 'experience', 'education', 'projects', 'skills', 'contact'];
+    // A short final section never gets its top above the 40% line, so the loop below
+    // can't ever pick it: at max scroll contact.top is (innerHeight - its height), which
+    // only clears 0.4*innerHeight on windows under ~820px tall. Being at the end of the
+    // page means you're in the last section, wherever its top sits. The tolerance is so
+    // this engages over the final stretch of scroll rather than snapping in the last pixel.
+    const doc = document.documentElement;
+    if (window.innerHeight + window.scrollY >= doc.scrollHeight - 130) {
+      const last = ids[ids.length - 1];
+      if (last !== this.state.active) this.setState({ active: last });
+      return;
+    }
+    let current = this.state.active;
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el && el.getBoundingClientRect().top < window.innerHeight * 0.4) current = id;
+    }
+    if (current !== this.state.active) this.setState({ active: current });
+  }
+
+  scrollToSection(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.scrollY - 90;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  }
+
+  startLoop() {
+    const draw = () => {
+      this._raf = requestAnimationFrame(draw);
+      const canvas = this.canvasRef.current;
+      if (!canvas || !this._geom || !this._mask) return;
+      const geom = this._geom;
+      const ctx = canvas.getContext('2d');
+      this._time += 0.012;
+
+      // read scroll directly, not from state — the loop must stay smooth and
+      // independent of React re-renders
+      const phaseAPx = geom.h * HeroGrid.PHASE_A;
+      const p1 = HeroGrid.clamp(window.scrollY / phaseAPx, 0, 1);
+      const swirlAlpha = HeroGrid.alphaFor(p1);
+
+      if (swirlAlpha <= 1e-4) {
+        if (!this._cleared) {
+          ctx.clearRect(0, 0, geom.w, geom.h);
+          this._cleared = true;
+        }
+        return;
+      }
+      this._cleared = false;
+      ctx.clearRect(0, 0, geom.w, geom.h);
+      ctx.font = geom.fontSize + 'px "JetBrains Mono", monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      for (let row = 0; row < geom.rows; row++) {
+        for (let col = 0; col < geom.cols; col++) {
+          if (this._mask.has(row * geom.cols + col)) continue;
+          const s = HeroGrid.sample(col, row, geom, 0, this._time, swirlAlpha);
+          if (!s) continue;
+          ctx.fillStyle = 'rgba(248,212,136,' + s.alpha.toFixed(3) + ')';
+          ctx.fillText(s.ch, col * geom.cellW, row * geom.cellH);
+        }
+      }
+    };
+    this._raf = requestAnimationFrame(draw);
+  }
+
+  renderVals() {
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const geom = this._geom || HeroGrid.geometry(this.state.winW, this.state.winH, NAME_ASCII.split('\n'));
+    const phaseAPx = this.state.winH * HeroGrid.PHASE_A;
+    const p1 = clamp(this.state.scrollY / phaseAPx, 0, 1);                        // swirl rise
+    const p2 = clamp((this.state.scrollY - phaseAPx) / HeroGrid.PHASE_B, 0, 1);   // name docks
+
+    const asciiName = NAME_ASCII;
+    const restLeft = geom.col0 * geom.cellW;
+    const restTop = geom.row0 * geom.cellH;
+    const left = lerp(restLeft, 30, p2);
+    const top = lerp(restTop, 26, p2);
+    const nameFontSize = lerp(geom.fontSize, HeroGrid.DOCKED_FONT, p2);
+    const namePad = lerp(0, 8, p2).toFixed(1) + 'px ' + lerp(0, 10, p2).toFixed(1) + 'px';
+    const namePlateBg = 'rgba(8,8,10,' + (p2 * 0.6).toFixed(3) + ')';
+
+    const nameStyle = {
+      position: 'fixed',
+      left: left + 'px',
+      top: top + 'px',
+      transform: 'translate(0, 0)',
+      zIndex: 90,
+      margin: 0
+    };
+
+    const taglineOpacity = clamp(1 - p2 * 2.6, 0, 1);
+    const subStyle = {
+      position: 'fixed',
+      left: '50%',
+      top: (restTop + geom.nameH + 34) + 'px',
+      transform: 'translate(-50%,0)',
+      opacity: taglineOpacity,
+      pointerEvents: p2 < 0.3 ? 'auto' : 'none',
+      zIndex: 55
+    };
+
+    const indicatorOpacity = clamp(1 - p1 * 6, 0, 1);
+    const navOpacity = clamp((p2 - 0.3) / 0.35, 0, 1);
+    const navPillVars = 'opacity:' + navOpacity + '; pointer-events:' + (navOpacity > 0.5 ? 'auto' : 'none') + ';';
+    // spacer covers phase A only — the content then scrolls in *during* the name's dock
+    const heroSpacerStyle = { position: 'relative', height: (this.state.winH + phaseAPx) + 'px', width: '100%' };
+
+    const ids = ['about', 'experience', 'education', 'projects', 'skills', 'contact'];
+    const navItems = ids.map((id) => ({
+      id,
+      href: '#' + id,
+      label: id.charAt(0).toUpperCase() + id.slice(1),
+      active: this.state.active === id,
+      color: this.state.active === id ? '#08080a' : 'rgba(242,241,236,0.65)',
+      bg: this.state.active === id ? '#f8d488' : 'transparent',
+      onClick: (e) => { e.preventDefault(); this.scrollToSection(id); }
+    }));
+
+    const experience = [
+      { range: 'Jun 2025 – Aug 2025', role: 'Software Engineering Intern', org: 'Acme Systems', dotColor: '#f8d488',
+        bullets: ['Built internal CI tooling that cut average build time by 30%', 'Shipped REST API endpoints consumed by four downstream teams', 'Raised integration test coverage from 62% to 88%'],
+        tags: ['Go', 'Docker', 'PostgreSQL'] },
+      { range: 'Sep 2024 – Present', role: 'Teaching Assistant, Data Structures & Algorithms', org: 'University CS Department', dotColor: '#fff3d0',
+        bullets: ['Ran weekly office hours for 40+ students', 'Wrote and graded exam problems on trees, graphs, and DP', 'Led review sessions before midterms and finals'],
+        tags: ['Java', 'Teaching'] },
+      { range: 'Jun 2024 – Aug 2024', role: 'Software Developer Intern', org: 'Riverbend Labs', dotColor: '#f8d488',
+        bullets: ['Migrated a legacy service to TypeScript, improving type safety', 'Implemented a caching layer that cut API latency by 40%', 'Partnered with design to ship a new internal dashboard'],
+        tags: ['TypeScript', 'React', 'Redis'] }
+    ];
+
+    const projects = [
+      { name: 'pathfinder.viz', desc: 'Interactive pathfinding visualizer comparing A*, Dijkstra, and BFS on generated mazes.', tags: ['JavaScript', 'Canvas'], link: '#', dotColor: '#f8d488' },
+      { name: 'kvstore-raft', desc: 'Distributed key-value store with Raft consensus, leader election, and log replication.', tags: ['Go', 'gRPC'], link: '#', dotColor: '#fff3d0' },
+      { name: 'digit-classifier', desc: 'Convolutional neural network for handwritten digit recognition, trained on MNIST.', tags: ['Python', 'PyTorch'], link: '#', dotColor: '#f8d488' },
+      { name: 'realtime-chat', desc: 'Multi-room chat application with presence indicators and typing state over WebSockets.', tags: ['React', 'Node.js', 'WS'], link: '#', dotColor: '#fff3d0' },
+      { name: 'toylang-compiler', desc: 'Compiler for a C-like toy language: hand-written lexer, parser, and x86 codegen backend.', tags: ['C++', 'LLVM'], link: '#', dotColor: '#f8d488' }
+    ];
+
+    const skillGroups = [
+      { title: 'Languages', items: [
+        { name: 'Python', level: 92 }, { name: 'Java', level: 85 }, { name: 'C++', level: 80 },
+        { name: 'TypeScript', level: 88 }, { name: 'Go', level: 70 }, { name: 'SQL', level: 82 }
+      ]},
+      { title: 'Frameworks & Libraries', items: [
+        { name: 'React', level: 86 }, { name: 'Node.js', level: 80 }, { name: 'PyTorch', level: 75 }, { name: 'Express', level: 78 }
+      ]},
+      { title: 'Tools & Platforms', items: [
+        { name: 'Git', level: 90 }, { name: 'Docker', level: 78 }, { name: 'Linux', level: 84 }, { name: 'AWS', level: 65 }
+      ]}
+    ];
+
+    const education = {
+      institution: 'State University', degree: 'B.S. in Computer Science', focus: 'Systems & Artificial Intelligence',
+      graduation: 'Expected May 2026', gpa: '3.85 / 4.0', gpaPct: 96,
+      coursework: ['Algorithms', 'Operating Systems', 'Computer Networks', 'Machine Learning', 'Database Systems', 'Compilers']
+    };
+
+    // --- nav neural-network layer strip: one layer per section, traversed on scroll ---
+    const layerCounts = [3, 4, 4, 3, 5, 2];
+    const activeIndex = Math.max(0, ids.indexOf(this.state.active));
+    const netW = 60;
+    const netH = Math.max(360, this.state.winH - 190);
+    const startY = 10;
+    const endY = netH - 10;
+    const gap = (endY - startY) / (layerCounts.length - 1);
+    const netLayerPts = layerCounts.map((n, li) => {
+      const y = startY + gap * li;
+      return Array.from({ length: n }, (_, i) => ({ y, x: 8 + ((netW - 16) / (n + 1)) * (i + 1) }));
+    });
+    // continuous traversal: signal travels along each edge, then the next layer's nodes light up
+    const flow = clamp(this.state.flow || 0, 0, layerCounts.length - 1);
+    const netNodes = [], netEdges = [], netPulses = [];
+    netLayerPts.forEach((layer, li) => {
+      // a layer charges as the signal arriving from the previous layer completes
+      const charge = li === 0 ? clamp(flow / 0.35, 0, 1) : clamp((flow - (li - 1) - 0.6) / 0.4, 0, 1);
+      const cur = Math.abs(flow - li) < 0.5;
+      layer.forEach((pt) => {
+        netNodes.push({
+          x: pt.x, y: pt.y,
+          r: 2.4 + charge * 1.2,
+          fill: charge < 0.02 ? 'rgba(242,241,236,0.16)'
+            : 'rgba(' + Math.round(248 + 7 * charge) + ',' + Math.round(212 + 31 * charge) + ',' + Math.round(136 + 68 * charge) + ',' + (0.25 + 0.75 * charge) + ')',
+          glowR: cur ? 4 + charge * 5 : 0,
+          glowFill: cur ? 'rgba(248,212,136,' + (0.2 * charge).toFixed(3) + ')' : 'transparent'
+        });
+      });
+      if (li < netLayerPts.length - 1) {
+        const t = clamp(flow - li, 0, 1);
+        const nextLayer = netLayerPts[li + 1];
+        layer.forEach((a) => nextLayer.forEach((b) => {
+          netEdges.push({
+            x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+            stroke: 'rgba(242,241,236,0.5)',
+            opacity: t > 0 ? 0.1 + 0.08 * t : 0.07
+          });
+          if (t > 0.01) {
+            netPulses.push({
+              x1: a.x, y1: a.y,
+              x2: a.x + (b.x - a.x) * t, y2: a.y + (b.y - a.y) * t,
+              opacity: (0.55 * Math.min(1, t * 3)).toFixed(3)
+            });
+          }
+        }));
+      }
+    });
+    const netStripStyle = {
+      position: 'fixed', top: '96px', left: '38px', width: netW + 'px', height: netH + 'px',
+      // above the content layer (z-index 10) — that layer is opaque #08080a and would
+      // otherwise paint straight over the strip. Safe: it sits in the empty margin
+      // beside the 900px content column, and is pointer-transparent.
+      zIndex: 20, opacity: clamp((p2 - 0.94) / 0.06, 0, 1) * 0.45, pointerEvents: 'none',
+      display: this.state.winW < 900 ? 'none' : 'block'
+    };
+
+    const cx = 320, cy = 300;
+    const rings = [
+      { title: 'LANGUAGES', radius: 95, items: skillGroups[0].items, color: '#f8d488' },
+      { title: 'FRAMEWORKS', radius: 175, items: skillGroups[1].items, color: '#fff3d0' },
+      { title: 'TOOLS', radius: 250, items: skillGroups[2].items, color: '#f2f1ec' }
+    ];
+    const skillNodes = [], skillLines = [], ringLabels = [];
+    rings.forEach((ring, ringIndex) => {
+      const count = ring.items.length;
+      ring.items.forEach((item, i) => {
+        const angle = (i / count) * Math.PI * 2 - Math.PI / 2 + ringIndex * (Math.PI / count) + ringIndex * 0.35;
+        const x = cx + ring.radius * Math.cos(angle);
+        const y = cy + ring.radius * Math.sin(angle) * 0.78;
+        const r = 4 + (item.level / 100) * 7;
+        skillNodes.push({
+          x, y, r, dotR: r * 0.4, name: item.name, level: item.level + '%', color: ring.color,
+          leftPct: (x / 640) * 100, nameTopPct: ((y - r - 11) / 600) * 100, levelTopPct: ((y + r + 11) / 600) * 100
+        });
+        skillLines.push({ x1: cx, y1: cy, x2: x, y2: y, color: ring.color, opacity: (item.level / 100) * 0.5 + 0.1 });
+      });
+      ringLabels.push({ title: ring.title, color: ring.color });
+    });
+
+    return {
+      canvasRef: this.canvasRef, heroRef: this.heroRef,
+      nameStyle, nameFontSize, namePad, namePlateBg, asciiName, subStyle, taglineOpacity, indicatorOpacity, navPillVars, navOpacity,
+      heroSpacerStyle,
+      navItems, experience, projects, skillGroups, education, skillNodes, skillLines, ringLabels,
+      netNodes, netEdges, netPulses, netStripStyle, netW, netH
+    };
+  }
+}
+</script>
+</body>
+</html>
