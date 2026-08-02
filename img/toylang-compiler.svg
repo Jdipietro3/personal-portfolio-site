@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Placeholder artwork: a syntax tree descending from a root node">
+  <rect width="800" height="450" fill="#0e0e11"/>
+  <g stroke="#fff3d0" stroke-opacity="0.22" stroke-width="1.5">
+    <line x1="400" y1="110" x2="240" y2="210"/>
+    <line x1="400" y1="110" x2="560" y2="210"/>
+    <line x1="240" y1="210" x2="160" y2="310"/>
+    <line x1="240" y1="210" x2="320" y2="310"/>
+    <line x1="560" y1="210" x2="480" y2="310"/>
+    <line x1="560" y1="210" x2="640" y2="310"/>
+  </g>
+  <g fill="#0e0e11" stroke="#fff3d0" stroke-opacity="0.55" stroke-width="1.5">
+    <rect x="212" y="192" width="56" height="36" rx="5"/>
+    <rect x="532" y="192" width="56" height="36" rx="5"/>
+    <rect x="134" y="292" width="52" height="36" rx="5"/>
+    <rect x="294" y="292" width="52" height="36" rx="5"/>
+    <rect x="454" y="292" width="52" height="36" rx="5"/>
+    <rect x="614" y="292" width="52" height="36" rx="5"/>
+  </g>
+  <rect x="360" y="88" width="80" height="44" rx="6" fill="#fff3d0" fill-opacity="0.14" stroke="#fff3d0" stroke-width="2"/>
+  <text x="40" y="410" fill="#f2f1ec" fill-opacity="0.32" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="19">toylang-compiler</text>
+</svg>

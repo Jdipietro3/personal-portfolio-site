@@ -15,7 +15,18 @@
 <meta name="description" content="Joseph DiPietro — Computer Science student working in systems and AI. Compilers, distributed systems, and machine learning projects.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap">
 <style>
-  * { box-sizing: border-box; }
+  /* scrollbar-width is NOT an inherited property (scrollbar-color is), so it has to go
+     on every element or the project dialog's own scroller falls back to the OS default
+     width in Firefox. */
+  * { box-sizing: border-box; scrollbar-width: thin; }
+  /* color-scheme tells the browser to render native UI (scrollbars, form controls,
+     focus rings) against a dark page. The -webkit- rules cover Chromium versions
+     predating standard scrollbar-color support. */
+  html { color-scheme: dark; scrollbar-color: rgba(242,241,236,0.22) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(242,241,236,0.18); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(248,212,136,0.42); }
   body { margin: 0; background: #08080a; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; -webkit-font-smoothing: antialiased; }
   a { color: #f8d488; text-decoration: none; }
   a:hover { color: #ffb37a; }
@@ -23,12 +34,18 @@
   @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
   @keyframes bounce { 0%, 100% { transform: translate(-50%,0); } 50% { transform: translate(-50%,10px); } }
   .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  .proj-card { cursor: pointer; transition: border-color 160ms ease, transform 160ms ease; }
+  .proj-card:hover { border-color: rgba(248,212,136,0.45); transform: translateY(-2px); }
+  .proj-card:focus-visible { outline: 2px solid #f8d488; outline-offset: 3px; }
+  .modal-close { cursor: pointer; background: none; border: 0; color: rgba(242,241,236,0.5); font-size: 22px; line-height: 1; padding: 4px 8px; font-family: inherit; }
+  .modal-close:hover { color: #f8d488; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
+    .proj-card:hover { transform: none; }
   }
 </style>
 </helmet>
@@ -167,13 +184,39 @@
     <section id="projects" style="padding:100px 24px; max-width:1100px; margin:0 auto;">
       <div style="font-size:12px; color:#f8d488; letter-spacing:0.15em; margin-bottom:14px;">SYS.04 // PROJECTS</div>
       <h2 style="margin-top:0; font-size:28px; font-weight:700; margin-bottom:48px;">Project Work</h2>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:22px;">
-        <sc-for list="{{ projects }}" as="proj" hint-placeholder-count="5">
-          <div style="border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; background:#0e0e11; display:flex; flex-direction:column;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:22px;">
+
+        <sc-for list="{{ featuredProjects }}" as="proj" hint-placeholder-count="2">
+          <div class="proj-card" role="button" tabindex="0" onClick="{{ proj.onOpen }}" onKeyDown="{{ proj.onCardKey }}" style="{{ proj.heroStyle }}">
+            <div style="{{ proj.heroImgWrapStyle }}">
+              <img src="{{ proj.image }}" alt="{{ proj.imageAlt }}" style="width:100%; height:100%; min-height:210px; object-fit:cover; display:block;">
+            </div>
+            <div style="padding:28px; display:flex; flex-direction:column; gap:14px; flex:1;">
+              <div style="display:flex; align-items:center; gap:9px;">
+                <div style="width:8px; height:8px; border-radius:50%; background:{{ proj.dotColor }}; flex:none;"></div>
+                <div style="font-size:17px; font-weight:700; color:#f2f1ec;">{{ proj.name }}</div>
+                <div style="font-size:11px; color:rgba(242,241,236,0.35); margin-left:auto;">{{ proj.year }}</div>
+              </div>
+              <div style="font-size:14px; color:rgba(242,241,236,0.75); line-height:1.7;">{{ proj.desc }}</div>
+              <div style="display:flex; gap:7px; flex-wrap:wrap;">
+                <sc-for list="{{ proj.tags }}" as="tag" hint-placeholder-count="3">
+                  <span style="font-size:10.5px; padding:4px 9px; border-radius:5px; border:1px solid rgba(255,255,255,0.12); color:rgba(242,241,236,0.55);">{{ tag }}</span>
+                </sc-for>
+              </div>
+              <div style="font-size:12.5px; color:{{ proj.dotColor }}; font-weight:600; margin-top:auto;">open details →</div>
+            </div>
+          </div>
+        </sc-for>
+
+        <sc-for list="{{ gridProjects }}" as="proj" hint-placeholder-count="3">
+          <div class="proj-card" role="button" tabindex="0" onClick="{{ proj.onOpen }}" onKeyDown="{{ proj.onCardKey }}" style="border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; background:#0e0e11; display:flex; flex-direction:column;">
             <div style="display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid rgba(255,255,255,0.08); background:#131316;">
               <div style="width:8px; height:8px; border-radius:50%; background:{{ proj.dotColor }};"></div>
               <div style="font-size:12px; color:rgba(242,241,236,0.5);">{{ proj.name }}</div>
             </div>
+            <sc-if value="{{ proj.hasImage }}">
+              <img src="{{ proj.image }}" alt="{{ proj.imageAlt }}" style="width:100%; aspect-ratio:16/9; object-fit:cover; display:block; border-bottom:1px solid rgba(255,255,255,0.08);">
+            </sc-if>
             <div style="padding:22px; display:flex; flex-direction:column; gap:16px; flex:1;">
               <div style="font-size:14px; color:rgba(242,241,236,0.75); line-height:1.6; flex:1;">{{ proj.desc }}</div>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -181,12 +224,46 @@
                   <span style="font-size:10.5px; padding:4px 9px; border-radius:5px; border:1px solid rgba(255,255,255,0.12); color:rgba(242,241,236,0.55);">{{ tag }}</span>
                 </sc-for>
               </div>
-              <a href="{{ proj.link }}" style="font-size:13px; color:{{ proj.dotColor }}; font-weight:600;">view source →</a>
+              <div style="font-size:12.5px; color:{{ proj.dotColor }}; font-weight:600;">open details →</div>
             </div>
           </div>
         </sc-for>
+
       </div>
     </section>
+
+    <sc-if value="{{ modal }}">
+      <div onClick="{{ modal.close }}" style="position:fixed; inset:0; z-index:200; background:rgba(6,6,8,0.82); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:24px;">
+        <div role="dialog" aria-modal="true" aria-label="{{ modal.name }}" onClick="{{ modal.stopProp }}" style="background:#0e0e11; border:1px solid rgba(255,255,255,0.14); border-radius:12px; max-width:760px; width:100%; max-height:86vh; overflow-y:auto; box-shadow:0 24px 80px rgba(0,0,0,0.6);">
+          <div style="display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.08); background:#131316; position:sticky; top:0;">
+            <div style="width:9px; height:9px; border-radius:50%; background:{{ modal.dotColor }}; flex:none;"></div>
+            <div style="font-size:14px; font-weight:700; color:#f2f1ec;">{{ modal.name }}</div>
+            <div style="font-size:11px; color:rgba(242,241,236,0.35);">{{ modal.year }}</div>
+            <button class="modal-close" aria-label="Close" onClick="{{ modal.close }}" style="margin-left:auto;">×</button>
+          </div>
+          <sc-if value="{{ modal.hasImage }}">
+            <img src="{{ modal.image }}" alt="{{ modal.imageAlt }}" style="width:100%; display:block; border-bottom:1px solid rgba(255,255,255,0.08);">
+          </sc-if>
+          <div style="padding:26px;">
+            <p style="margin:0; font-size:14.5px; line-height:1.8; color:rgba(242,241,236,0.85);">{{ modal.longDesc }}</p>
+            <div style="font-size:11px; letter-spacing:0.16em; color:#f8d488; opacity:0.8; margin:26px 0 12px;">WHAT'S IN IT</div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <sc-for list="{{ modal.highlights }}" as="h" hint-placeholder-count="4">
+                <div style="font-size:13.5px; color:rgba(242,241,236,0.75); line-height:1.65; padding-left:16px; position:relative;">
+                  <span style="position:absolute; left:0; color:rgba(242,241,236,0.3);">›</span>{{ h }}
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:7px; flex-wrap:wrap; margin-top:26px;">
+              <sc-for list="{{ modal.tags }}" as="tag" hint-placeholder-count="4">
+                <span style="font-size:11px; padding:5px 11px; border-radius:5px; border:1px solid rgba(255,255,255,0.12); color:rgba(242,241,236,0.6);">{{ tag }}</span>
+              </sc-for>
+            </div>
+            <a href="{{ modal.link }}" style="display:inline-block; margin-top:26px; background:#f8d488; color:#08080a; font-weight:700; font-size:13px; padding:11px 20px; border-radius:999px;">view source →</a>
+          </div>
+        </div>
+      </div>
+    </sc-if>
 
     <!-- SKILLS -->
     <section id="skills" style="padding:100px 24px; max-width:900px; margin:0 auto;">
@@ -245,7 +322,8 @@ class Component extends DCLogic {
       scrollY: 0,
       winW: typeof window !== 'undefined' ? window.innerWidth : 1440,
       winH: typeof window !== 'undefined' ? window.innerHeight : 900,
-      active: 'about'
+      active: 'about',
+      openProject: null
     };
     this._time = 0;
     this._geom = null;
@@ -265,6 +343,10 @@ class Component extends DCLogic {
     };
     window.addEventListener('scroll', this.onScroll, { passive: true });
     window.addEventListener('resize', this.onResize);
+    this.onKeyDown = (e) => {
+      if (e.key === 'Escape' && this.state.openProject != null) this.closeProjectModal();
+    };
+    window.addEventListener('keydown', this.onKeyDown);
     this.sizeCanvas();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.sizeCanvas());
     this.startLoop();
@@ -273,6 +355,8 @@ class Component extends DCLogic {
   componentWillUnmount() {
     window.removeEventListener('scroll', this.onScroll);
     window.removeEventListener('resize', this.onResize);
+    window.removeEventListener('keydown', this.onKeyDown);
+    document.body.style.overflow = this._prevOverflow || '';
     if (this._raf) cancelAnimationFrame(this._raf);
   }
 
@@ -328,6 +412,24 @@ class Component extends DCLogic {
       if (el && el.getBoundingClientRect().top < window.innerHeight * 0.4) current = id;
     }
     if (current !== this.state.active) this.setState({ active: current });
+  }
+
+  // Body scroll is locked while the dialog is open so the page behind it does not
+  // drift under the overlay. The previous overflow value is restored rather than
+  // hard-set to a default, since something else may legitimately own it.
+  openProjectModal(key) {
+    this._prevOverflow = document.body.style.overflow;
+    this._prevFocus = document.activeElement;
+    document.body.style.overflow = 'hidden';
+    this.setState({ openProject: key });
+  }
+
+  closeProjectModal() {
+    if (this.state.openProject == null) return;
+    document.body.style.overflow = this._prevOverflow || '';
+    this.setState({ openProject: null });
+    // send focus back to whatever card opened the dialog
+    if (this._prevFocus && this._prevFocus.focus) this._prevFocus.focus();
   }
 
   scrollToSection(id) {
@@ -461,12 +563,77 @@ class Component extends DCLogic {
     ];
 
     const projects = [
-      { name: 'pathfinder.viz', desc: 'Interactive pathfinding visualizer comparing A*, Dijkstra, and BFS on generated mazes.', tags: ['JavaScript', 'Canvas'], link: '#', dotColor: '#f8d488' },
-      { name: 'kvstore-raft', desc: 'Distributed key-value store with Raft consensus, leader election, and log replication.', tags: ['Go', 'gRPC'], link: '#', dotColor: '#fff3d0' },
-      { name: 'digit-classifier', desc: 'Convolutional neural network for handwritten digit recognition, trained on MNIST.', tags: ['Python', 'PyTorch'], link: '#', dotColor: '#f8d488' },
-      { name: 'realtime-chat', desc: 'Multi-room chat application with presence indicators and typing state over WebSockets.', tags: ['React', 'Node.js', 'WS'], link: '#', dotColor: '#fff3d0' },
-      { name: 'toylang-compiler', desc: 'Compiler for a C-like toy language: hand-written lexer, parser, and x86 codegen backend.', tags: ['C++', 'LLVM'], link: '#', dotColor: '#f8d488' }
+      { key: 'raft', name: 'kvstore-raft', featured: true,
+        image: './img/kvstore-raft.svg', imageAlt: 'Diagram of a five-node cluster with one elected leader',
+        year: '2025', dotColor: '#fff3d0', link: '#',
+        desc: 'Distributed key-value store with Raft consensus, leader election, and log replication.',
+        longDesc: 'A from-scratch implementation of the Raft consensus protocol backing a replicated key-value store. Nodes hold an election when the leader stops heartbeating, and committed entries replicate to a majority before the write is acknowledged.',
+        highlights: ['Leader election with randomised timeouts to avoid split votes', 'Log replication with conflict resolution on rejoin', 'Snapshotting so the log does not grow without bound', 'Tested against injected network partitions with netem'],
+        tags: ['Go', 'gRPC', 'Raft', 'Docker'] },
+      { key: 'toylang', name: 'toylang-compiler', featured: true,
+        image: './img/toylang-compiler.svg', imageAlt: 'Diagram of a syntax tree descending from a root node',
+        year: '2025', dotColor: '#f8d488', link: '#',
+        desc: 'Compiler for a C-like toy language: hand-written lexer, parser, and x86 codegen backend.',
+        longDesc: 'A complete compiler front-to-back with no parser generator involved. Source becomes tokens, tokens become an AST by recursive descent, and the AST lowers to x86-64 assembly that links against libc and runs natively.',
+        highlights: ['Hand-written lexer and recursive-descent parser', 'Typed AST with a resolution pass before codegen', 'x86-64 backend emitting linkable assembly', 'Differential test harness diffing output against a reference interpreter'],
+        tags: ['C++', 'LLVM', 'x86-64'] },
+      { key: 'pathviz', name: 'pathfinder.viz', featured: false,
+        image: './img/pathfinder-viz.svg', imageAlt: 'A maze grid with a solved path running through it',
+        year: '2024', dotColor: '#f8d488', link: '#',
+        desc: 'Interactive pathfinding visualizer comparing A*, Dijkstra, and BFS on generated mazes.',
+        longDesc: 'Draw walls, drop a start and a goal, then watch three algorithms explore the same maze side by side. Every frame of the search is steppable, so the difference between an informed and an uninformed search is something you can watch rather than read about.',
+        highlights: ['A*, Dijkstra, and breadth-first search on a shared grid', 'Step, play, and scrub through the frontier as it expands', 'Procedural maze generation with adjustable density'],
+        tags: ['JavaScript', 'Canvas'] },
+      { key: 'digits', name: 'digit-classifier', featured: false,
+        image: './img/digit-classifier.svg', imageAlt: 'A coarse pixel grid resolving into a handwritten digit',
+        year: '2024', dotColor: '#f8d488', link: '#',
+        desc: 'Convolutional neural network for handwritten digit recognition, trained on MNIST.',
+        longDesc: 'A small convolutional network trained on MNIST, plus the tooling around it that made the accuracy number trustworthy: a held-out split, a confusion matrix, and a viewer for the cases it got wrong.',
+        highlights: ['Two convolutional blocks into a dense classifier head', 'Augmentation with small rotations and shifts', 'Confusion matrix and misclassification viewer for error analysis'],
+        tags: ['Python', 'PyTorch', 'NumPy'] },
+      { key: 'chat', name: 'realtime-chat', featured: false,
+        image: null, imageAlt: '',
+        year: '2024', dotColor: '#fff3d0', link: '#',
+        desc: 'Multi-room chat application with presence indicators and typing state over WebSockets.',
+        longDesc: 'Multi-room chat over a single WebSocket connection, with presence and typing state that stay correct when connections drop. Reconnect replays anything missed rather than leaving a hole in the transcript.',
+        highlights: ['One multiplexed socket across all joined rooms', 'Presence and typing state expiring per connection', 'Reconnect with replay of missed messages'],
+        tags: ['React', 'Node.js', 'WebSockets', 'Redis'] }
     ];
+
+    const stackHero = this.state.winW < 760;
+    projects.forEach((p) => {
+      p.onOpen = () => this.openProjectModal(p.key);
+      p.onCardKey = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.key === ' ') e.preventDefault();
+          this.openProjectModal(p.key);
+        }
+      };
+      p.hasImage = !!p.image;
+      if (p.featured) {
+        p.heroStyle = {
+          display: 'flex', flexDirection: stackHero ? 'column' : 'row', gridColumn: '1 / -1',
+          border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', overflow: 'hidden', background: '#0e0e11'
+        };
+        p.heroImgWrapStyle = {
+          width: stackHero ? '100%' : '42%', flex: 'none', background: '#08080a',
+          borderRight: stackHero ? 'none' : '1px solid rgba(255,255,255,0.08)',
+          borderBottom: stackHero ? '1px solid rgba(255,255,255,0.08)' : 'none'
+        };
+      }
+    });
+
+    const featuredProjects = projects.filter((p) => p.featured);
+    const gridProjects = projects.filter((p) => !p.featured);
+
+    const openProj = this.state.openProject != null ? projects.find((p) => p.key === this.state.openProject) : null;
+    const modal = openProj ? {
+      name: openProj.name, longDesc: openProj.longDesc, highlights: openProj.highlights, tags: openProj.tags,
+      link: openProj.link, image: openProj.image, imageAlt: openProj.imageAlt, year: openProj.year,
+      dotColor: openProj.dotColor, hasImage: openProj.hasImage,
+      close: () => this.closeProjectModal(),
+      stopProp: (e) => e.stopPropagation()
+    } : null;
 
     // flat skill groups rendered directly as chips
     const skills = [
@@ -542,7 +709,7 @@ class Component extends DCLogic {
       canvasRef: this.canvasRef, heroRef: this.heroRef,
       nameStyle, nameFontSize, namePad, namePlateBg, asciiName, subStyle, taglineOpacity, indicatorOpacity, navPillVars, navOpacity,
       heroSpacerStyle,
-      navItems, experience, projects, education, skills,
+      navItems, experience, featuredProjects, gridProjects, modal, education, skills,
       netNodes, netEdges, netPulses, netStripStyle, netW, netH
     };
   }
