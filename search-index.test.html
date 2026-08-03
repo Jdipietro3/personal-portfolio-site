@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SearchIndex test harness</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    background: #0b0d10;
+    color: #d8dee9;
+    margin: 0;
+    padding: 24px;
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  h1 { font-size: 16px; color: #e5e9f0; margin: 0 0 4px; }
+  h2 { font-size: 13px; color: #88c0d0; margin: 28px 0 8px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .sub { color: #6b7280; margin-bottom: 18px; }
+  table { border-collapse: collapse; font-size: 12px; margin-bottom: 10px; }
+  th, td { text-align: left; padding: 3px 12px 3px 0; vertical-align: top; }
+  th { color: #6b7280; font-weight: normal; border-bottom: 1px solid #262b33; }
+  td.num { text-align: right; color: #b48ead; }
+  .pass { color: #a3be8c; }
+  .fail { color: #bf616a; font-weight: bold; }
+  .dim { color: #4c566a; }
+  .hit { color: #ebcb8b; }
+  .summary { font-size: 14px; margin-top: 14px; padding: 8px 12px; border-radius: 6px; display: inline-block; }
+  .summary.ok { background: #2b3a2b; color: #a3be8c; }
+  .summary.bad { background: #3a2b2b; color: #bf616a; }
+  .stat { color: #b48ead; }
+  #assertions div { padding: 1px 0; }
+  code { color: #8fbcbb; }
+</style>
+</head>
+<body>
+
+<h1>SearchIndex test harness</h1>
+<div class="sub">
+  Loads ./content.js and ./search-index.js as plain scripts. Never linked from the site.
+  Deliberately does <strong>not</strong> load the embedding model &mdash; this covers the layer
+  that has to work offline and before the model arrives.
+</div>
+
+<h2>Chunk inventory</h2>
+<div id="inventory"></div>
+
+<h2>Tokenizer</h2>
+<div id="tokens"></div>
+
+<h2>Query battery (keyword-only)</h2>
+<div class="sub">Top 3 per query with scores. <span class="hit">Gold</span> = the expected group.</div>
+<div id="queries"></div>
+
+<h2>Assertions</h2>
+<div id="assertions"></div>
+<div id="summary"></div>
+
+<script src="./content.js"></script>
+<script src="./search-index.js"></script>
+<script>
+(function () {
+  var results = [];
+  function assert(name, cond, expected, actual) {
+    results.push({ name: name, pass: !!cond, expected: expected, actual: actual });
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  var chunks = SearchIndex.buildChunks(window.SiteContent);
+  var index = SearchIndex.buildIndex(chunks);
+
+  // ---------- Chunk inventory ----------
+  var rows = ['<table><tr><th>#</th><th>id</th><th>kind</th><th>group</th><th>anchor</th><th>proj</th><th>w</th><th>len</th><th>snippet</th></tr>'];
+  chunks.forEach(function (c, i) {
+    rows.push('<tr><td class="num">' + i + '</td><td><code>' + esc(c.id) + '</code></td><td>' + esc(c.kind)
+      + '</td><td class="dim">' + esc(c.groupId) + '</td><td class="dim">' + esc(c.anchorId)
+      + '</td><td class="dim">' + esc(c.openProject || '-') + '</td><td class="num">' + c.weight
+      + '</td><td class="num">' + c.text.length + '</td><td class="dim">'
+      + esc(c.snippet.slice(0, 58)) + (c.snippet.length > 58 ? '&hellip;' : '') + '</td></tr>');
+  });
+  rows.push('</table>');
+  document.getElementById('inventory').innerHTML =
+    '<div class="sub"><span class="stat">' + chunks.length + '</span> chunks, '
+    + '<span class="stat">' + index.vocab.length + '</span> vocab terms, avgdl '
+    + '<span class="stat">' + index.avgdl.toFixed(1) + '</span></div>' + rows.join('');
+
+  // --- inventory assertions ---
+  var ids = {}, dupe = null;
+  chunks.forEach(function (c) { if (ids[c.id]) dupe = c.id; ids[c.id] = true; });
+  assert('chunk ids are unique', !dupe, 'no duplicates', dupe || 'none');
+
+  var sectionIds = window.SiteContent.sections.map(function (s) { return s.id; });
+  var badSection = chunks.filter(function (c) { return sectionIds.indexOf(c.section) === -1; });
+  assert('every chunk maps to a real section', badSection.length === 0, 0, badSection.length);
+
+  var projKeys = window.SiteContent.projects.map(function (p) { return p.key; });
+  var badProj = chunks.filter(function (c) { return c.openProject && projKeys.indexOf(c.openProject) === -1; });
+  assert('every openProject matches a real project key', badProj.length === 0, 0, badProj.length);
+
+  var empty = chunks.filter(function (c) { return !c.text || !c.snippet || !c.title; });
+  assert('no chunk has empty text/snippet/title', empty.length === 0, 0, empty.length);
+
+  // Catches content added to content.js that silently never reaches the index.
+  var missingProj = projKeys.filter(function (k) {
+    return !chunks.some(function (c) { return c.groupId === 'proj:' + k; });
+  });
+  assert('every project is indexed', missingProj.length === 0, '[]', JSON.stringify(missingProj));
+
+  var missingJob = window.SiteContent.experience.map(function (j) { return j.id; }).filter(function (id) {
+    return !chunks.some(function (c) { return c.groupId === 'exp:' + id; });
+  });
+  assert('every job is indexed', missingJob.length === 0, '[]', JSON.stringify(missingJob));
+
+  ['about', 'edu', 'contact'].forEach(function (g) {
+    assert('group "' + g + '" is indexed', chunks.some(function (c) { return c.groupId === g; }), true,
+      chunks.some(function (c) { return c.groupId === g; }));
+  });
+
+  assert('chunk count is in the expected band', chunks.length >= 35 && chunks.length <= 70, '35..70', chunks.length);
+
+  // ---------- Tokenizer ----------
+  var tokCases = [
+    ['C++', ['c++']],
+    ['Node.js', ['node.js']],
+    ['A*', ['a*']],
+    ['x86-64', ['x86-64']],
+    ['gRPC', ['grpc']],
+    ['models', ['model']],
+    ['compilers', ['compiler']],
+    ['Go?', ['go']],
+    ['taught', ['teach']],
+    ['teaching', ['teach']],
+    ['built', ['build']],
+    ['wrote', ['write']],
+    ['the and of a to', []],
+    ['What has he built with Go', ['build', 'go']]
+  ];
+  var tokRows = ['<table><tr><th>input</th><th>tokens</th><th>expected</th><th></th></tr>'];
+  tokCases.forEach(function (tc) {
+    var got = SearchIndex.tokenize(tc[0]);
+    var ok = JSON.stringify(got) === JSON.stringify(tc[1]);
+    tokRows.push('<tr><td><code>' + esc(tc[0]) + '</code></td><td>' + esc(JSON.stringify(got))
+      + '</td><td class="dim">' + esc(JSON.stringify(tc[1])) + '</td><td class="' + (ok ? 'pass' : 'fail') + '">'
+      + (ok ? 'ok' : 'FAIL') + '</td></tr>');
+    assert('tokenize(' + tc[0] + ')', ok, JSON.stringify(tc[1]), JSON.stringify(got));
+  });
+  tokRows.push('</table>');
+  document.getElementById('tokens').innerHTML = tokRows.join('');
+
+  // ---------- Cosine unit tests ----------
+  var v = [1, 2, 3];
+  assert('cosine: identical vectors = 1', Math.abs(SearchIndex.cosine(v, v) - 1) < 1e-12, 1, SearchIndex.cosine(v, v));
+  assert('cosine: orthogonal = 0', SearchIndex.cosine([1, 0], [0, 1]) === 0, 0, SearchIndex.cosine([1, 0], [0, 1]));
+  assert('cosine: opposite = -1', Math.abs(SearchIndex.cosine([1, 0], [-1, 0]) + 1) < 1e-12, -1, SearchIndex.cosine([1, 0], [-1, 0]));
+  assert('cosine: length mismatch = 0', SearchIndex.cosine([1, 2], [1, 2, 3]) === 0, 0, SearchIndex.cosine([1, 2], [1, 2, 3]));
+  assert('cosine: zero vector = 0', SearchIndex.cosine([0, 0], [1, 2]) === 0, 0, SearchIndex.cosine([0, 0], [1, 2]));
+  assert('cosine: null input = 0', SearchIndex.cosine(null, [1]) === 0, 0, SearchIndex.cosine(null, [1]));
+
+  // ---------- Rank tests on synthetic scores ----------
+  (function () {
+    var fake = [
+      { id: 'a1', groupId: 'A', kind: 'k', section: 'about', anchorId: 'about', title: 'A1', snippet: 's', text: 't', weight: 1 },
+      { id: 'a2', groupId: 'A', kind: 'k', section: 'about', anchorId: 'about', title: 'A2', snippet: 's', text: 't', weight: 1 },
+      { id: 'b1', groupId: 'B', kind: 'k', section: 'about', anchorId: 'about', title: 'B1', snippet: 's', text: 't', weight: 1 },
+      { id: 'c1', groupId: 'C', kind: 'k', section: 'about', anchorId: 'about', title: 'C1', snippet: 's', text: 't', weight: 0.5 }
+    ];
+    var idx = { chunks: fake, N: 4 };
+    var out = SearchIndex.rank(idx, new Float64Array([0.9, 0.8, 0.7, 0.6]), null);
+    assert('rank: collapses to one result per group', out.length === 3, 3, out.length);
+    assert('rank: keeps the highest-scoring chunk in a group', out[0].id === 'a1', 'a1', out[0].id);
+    assert('rank: applies chunk weight', Math.abs(out[2].score - 0.3) < 1e-12, 0.3, out[2].score);
+
+    var lowOut = SearchIndex.rank(idx, new Float64Array([0.05, 0.04, 0.03, 0.02]), null);
+    assert('rank: drops everything below threshold', lowOut.length === 0, 0, lowOut.length);
+
+    var many = [], scores = [];
+    for (var i = 0; i < 12; i++) {
+      many.push({ id: 'x' + i, groupId: 'G' + i, kind: 'k', section: 'about', anchorId: 'about', title: 'x', snippet: 's', text: 't', weight: 1 });
+      scores.push(0.9);
+    }
+    var capped = SearchIndex.rank({ chunks: many, N: 12 }, new Float64Array(scores), null);
+    assert('rank: caps at MAX_RESULTS', capped.length === SearchIndex.MAX_RESULTS, SearchIndex.MAX_RESULTS, capped.length);
+
+    // blended path: a strong cosine should beat a strong keyword hit on another chunk
+    var blend = SearchIndex.rank(idx, new Float64Array([0.9, 0, 0, 0]), new Float64Array([0.3, 0.95, 0, 0]));
+    assert('rank: semantic outranks lexical when much stronger', blend[0].id === 'a2', 'a2', blend[0].id);
+
+    // The gate is what makes "nothing matched" possible: cosine on short text never
+    // approaches zero, so nonsense queries still produce a ~0.2 top similarity.
+    var gated = SearchIndex.rank(idx, new Float64Array([0, 0, 0, 0]), new Float64Array([0.25, 0.24, 0.2, 0.1]));
+    assert('rank: similarity below SEM_GATE with no keyword hit is dropped', gated.length === 0, 0, gated.length);
+
+    var passed = SearchIndex.rank(idx, new Float64Array([0, 0, 0, 0]), new Float64Array([0.45, 0.1, 0.1, 0.1]));
+    assert('rank: similarity above SEM_GATE survives without a keyword hit', passed.length === 1, 1, passed.length);
+
+    // A keyword hit is its own evidence — it must not be gated out by a low cosine.
+    var lexOnly = SearchIndex.rank(idx, new Float64Array([0.6, 0, 0, 0]), new Float64Array([0.05, 0.05, 0.05, 0.05]));
+    assert('rank: a keyword hit is never gated out by low similarity', lexOnly.length === 1 && lexOnly[0].id === 'a1', 'a1', JSON.stringify(lexOnly.map(function (x) { return x.id; })));
+  })();
+
+  // ---------- Precomputed vector codec ----------
+  (function () {
+    // Deterministic pseudo-vectors: no Math.random, so a failure is reproducible.
+    var fake = [], seed = 12345;
+    function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff - 0.5; }
+    for (var i = 0; i < 6; i++) {
+      var v = new Float32Array(384), norm = 0;
+      for (var d = 0; d < 384; d++) { v[d] = rnd(); norm += v[d] * v[d]; }
+      norm = Math.sqrt(norm);
+      for (var e = 0; e < 384; e++) v[e] /= norm;      // the model emits unit vectors
+      fake.push(v);
+    }
+
+    var payload = SearchIndex.encodeVectors(fake);
+    assert('encodeVectors: reports the right shape', payload.count === 6 && payload.dims === 384,
+      '6x384', payload.count + 'x' + payload.dims);
+    assert('encodeVectors: base64 length matches count*dims',
+      payload.data.length === Math.ceil(6 * 384 / 3) * 4, Math.ceil(6 * 384 / 3) * 4, payload.data.length);
+
+    var back = SearchIndex.decodeVectors(payload);
+    assert('decodeVectors: returns the same number of vectors', back && back.length === 6, 6, back && back.length);
+
+    // The only property that has to survive int8 quantisation is direction —
+    // cosine() normalises, so per-vector scale is irrelevant by construction.
+    var worst = 1;
+    for (var k = 0; k < 6; k++) { var c = SearchIndex.cosine(back[k], fake[k]); if (c < worst) worst = c; }
+    assert('decodeVectors: round-trip cosine > 0.999 (quantisation preserves ranking)',
+      worst > 0.999, '> 0.999', worst.toFixed(6));
+
+    // Negative components must survive the two's-complement round trip.
+    var neg = [new Float32Array([-1, 0.5, -0.25, 1])];
+    var negBack = SearchIndex.decodeVectors(SearchIndex.encodeVectors(neg));
+    assert('decodeVectors: preserves sign', negBack[0][0] < 0 && negBack[0][2] < 0 && negBack[0][1] > 0,
+      'signs preserved', JSON.stringify(Array.from(negBack[0])));
+
+    assert('decodeVectors: rejects a truncated payload',
+      SearchIndex.decodeVectors({ data: payload.data.slice(0, 40), count: 6, dims: 384 }) === null,
+      null, SearchIndex.decodeVectors({ data: payload.data.slice(0, 40), count: 6, dims: 384 }));
+    assert('decodeVectors: rejects junk', SearchIndex.decodeVectors(null) === null, null, 'ok');
+    assert('decodeVectors: rejects a wrong count',
+      SearchIndex.decodeVectors({ data: payload.data, count: 5, dims: 384 }) === null, null, 'ok');
+  })();
+
+  // ---------- Corpus hash ----------
+  (function () {
+    var h1 = SearchIndex.corpusHash(chunks, 'model-a', 'q8');
+    assert('corpusHash: is stable across calls', h1 === SearchIndex.corpusHash(chunks, 'model-a', 'q8'), h1,
+      SearchIndex.corpusHash(chunks, 'model-a', 'q8'));
+    assert('corpusHash: changes with the model', h1 !== SearchIndex.corpusHash(chunks, 'model-b', 'q8'), 'differs', 'same');
+    assert('corpusHash: changes with the dtype', h1 !== SearchIndex.corpusHash(chunks, 'model-a', 'fp32'), 'differs', 'same');
+
+    // The point of the hash: an edit to any chunk text must invalidate it, or a
+    // stale search-vectors.js would silently rank against the wrong content.
+    var edited = chunks.map(function (c) { return Object.assign({}, c); });
+    edited[3].text = edited[3].text + ' (edited)';
+    assert('corpusHash: changes when any chunk text changes',
+      h1 !== SearchIndex.corpusHash(edited, 'model-a', 'q8'), 'differs', 'same');
+
+    var reordered = chunks.slice(); var tmp = reordered[0]; reordered[0] = reordered[1]; reordered[1] = tmp;
+    assert('corpusHash: changes when chunk order changes (vectors are positional)',
+      h1 !== SearchIndex.corpusHash(reordered, 'model-a', 'q8'), 'differs', 'same');
+
+    assert('corpusHash: is 8 hex chars', /^[0-9a-f]{8}$/.test(h1), '8 hex', h1);
+  })();
+
+  // ---------- Query battery ----------
+  var battery = [
+    ['does he know raft', 'proj:raft'],
+    ['compiler', 'proj:toylang'],
+    ['who wrote a lexer', 'proj:toylang'],
+    // Only reaches the TA role because IRREGULAR maps 'taught' -> 'teach'. Without
+    // that entry this query returns nothing in keyword mode, and MiniLM scores the
+    // research role above the teaching one, so the model doesn't rescue it either.
+    ['has he taught anyone', 'exp:ta'],
+    ['what has he built', ['exp:acme', 'proj:raft', 'proj:toylang', 'exp:nsl']],
+    ['teaching experience', 'exp:ta'],
+    ['what is his gpa', 'edu'],
+    ['where does he go to school', 'edu'],
+    ['how do i contact him', 'contact'],
+    ['websockets', 'proj:chat'],
+    ['how did he speed up builds', 'exp:acme'],
+    ['neural network', ['proj:digits', 'exp:nsl']],
+    ['machine learning experience', ['exp:nsl', 'proj:digits', 'skills:ml']],
+    ['redis', ['exp:riverbend', 'proj:chat', 'skills:systems']],
+    ['pathfinding maze', 'proj:pathviz'],
+    ['is he available for an internship', ['about', 'contact']],
+    ['does he know rust', null],
+    ['asdfghjkl', null]
+  ];
+
+  var qRows = ['<table><tr><th>query</th><th>expected</th><th>top 3 (score)</th><th></th></tr>'];
+  battery.forEach(function (bc) {
+    var query = bc[0];
+    var want = bc[1];
+    var res = SearchIndex.search(index, query, null, null);
+    var semanticOnly = want === 'SEMANTIC';
+    var wantList = (want == null || semanticOnly) ? [] : (Array.isArray(want) ? want : [want]);
+
+    // 'SEMANTIC' and null both expect nothing here; they differ only in why.
+    var ok = (want === null || semanticOnly)
+      ? res.length === 0
+      : res.length > 0 && wantList.indexOf(res[0].groupId) !== -1;
+
+    var top = res.slice(0, 3).map(function (r) {
+      var cls = wantList.indexOf(r.groupId) !== -1 ? 'hit' : 'dim';
+      return '<span class="' + cls + '">' + esc(r.groupId) + '</span> ' + r.score.toFixed(3);
+    }).join(' &nbsp;|&nbsp; ') || '<span class="dim">(no results)</span>';
+
+    var wantLabel = semanticOnly ? '<span class="hit">needs model</span>'
+      : (want === null ? '(nothing)' : esc(wantList.join(' | ')));
+    qRows.push('<tr><td><code>' + esc(query) + '</code></td><td class="dim">'
+      + wantLabel + '</td><td>' + top
+      + '</td><td class="' + (ok ? 'pass' : 'fail') + '">' + (ok ? 'ok' : 'FAIL') + '</td></tr>');
+
+    assert('query: ' + query, ok,
+      (want === null || semanticOnly) ? 'no results' : wantList.join(' | '),
+      res.length ? res[0].groupId + ' (' + res[0].score.toFixed(3) + ')' : 'no results');
+  });
+  qRows.push('</table>');
+  document.getElementById('queries').innerHTML = qRows.join('');
+
+  // prefix matching, so results appear mid-word while typing
+  assert('prefix: "compil" reaches the compiler project',
+    SearchIndex.search(index, 'compil', null, null).some(function (r) { return r.groupId === 'proj:toylang'; }),
+    true, JSON.stringify(SearchIndex.search(index, 'compil', null, null).map(function (r) { return r.groupId; })));
+
+  assert('empty query returns nothing', SearchIndex.search(index, '', null, null).length === 0, 0,
+    SearchIndex.search(index, '', null, null).length);
+  assert('whitespace query returns nothing', SearchIndex.search(index, '   ', null, null).length === 0, 0,
+    SearchIndex.search(index, '   ', null, null).length);
+  assert('stopword-only query returns nothing', SearchIndex.search(index, 'the of and', null, null).length === 0, 0,
+    SearchIndex.search(index, 'the of and', null, null).length);
+
+  // ---------- Render assertions ----------
+  var host = document.getElementById('assertions');
+  var failed = 0;
+  results.forEach(function (r) {
+    if (!r.pass) failed++;
+    var line = document.createElement('div');
+    line.className = r.pass ? 'pass' : 'fail';
+    line.innerHTML = (r.pass ? '&#10003; ' : '&#10007; ') + esc(r.name)
+      + (r.pass ? '' : ' &mdash; expected <code>' + esc(r.expected) + '</code>, got <code>' + esc(r.actual) + '</code>');
+    host.appendChild(line);
+  });
+
+  var sum = document.getElementById('summary');
+  sum.className = 'summary ' + (failed ? 'bad' : 'ok');
+  sum.textContent = failed
+    ? failed + ' of ' + results.length + ' assertions FAILED'
+    : 'all ' + results.length + ' assertions passed';
+})();
+</script>
+</body>
+</html>
