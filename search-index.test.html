@@ -267,25 +267,35 @@
 
   // ---------- Query battery ----------
   var battery = [
+    // --- real content: experience ---
+    ['does he know c#', ['exp:dovetail', 'skills:languages']],
+    ['ecommerce platform', 'exp:dovetail'],
+    ['has he worked with erp systems', 'exp:dovetail'],
+    ['asp.net', ['exp:dovetail', 'skills:frameworks']],
+    ['c++ experience', ['exp:mastercam', 'skills:languages', 'proj:toylang']],
+    ['agile scrum', ['exp:dovetail', 'exp:mastercam', 'skills:practices']],
+    ['has he worked directly with clients', 'exp:dovetail'],
+    ['where is he interning', ['exp:mitre', 'exp:dovetail']],
+
+    // --- real content: education, skills, contact ---
+    ['what is his gpa', 'edu'],
+    ['where does he go to school', 'edu'],
+    ['what university does he attend', 'edu'],
+    ['dean\'s list', 'edu'],
+    ['what classes has he taken', 'edu'],
+    ['how do i contact him', 'contact'],
+    ['machine learning experience', ['proj:digits', 'skills:frameworks', 'edu']],
+    ['is he looking for a job', ['about', 'contact']],
+
+    // --- still placeholder: the projects section has not been filled in yet, so
+    //     these assert the engine, not the résumé. Revisit when projects land.
     ['does he know raft', 'proj:raft'],
     ['compiler', 'proj:toylang'],
     ['who wrote a lexer', 'proj:toylang'],
-    // Only reaches the TA role because IRREGULAR maps 'taught' -> 'teach'. Without
-    // that entry this query returns nothing in keyword mode, and MiniLM scores the
-    // research role above the teaching one, so the model doesn't rescue it either.
-    ['has he taught anyone', 'exp:ta'],
-    ['what has he built', ['exp:acme', 'proj:raft', 'proj:toylang', 'exp:nsl']],
-    ['teaching experience', 'exp:ta'],
-    ['what is his gpa', 'edu'],
-    ['where does he go to school', 'edu'],
-    ['how do i contact him', 'contact'],
     ['websockets', 'proj:chat'],
-    ['how did he speed up builds', 'exp:acme'],
-    ['neural network', ['proj:digits', 'exp:nsl']],
-    ['machine learning experience', ['exp:nsl', 'proj:digits', 'skills:ml']],
-    ['redis', ['exp:riverbend', 'proj:chat', 'skills:systems']],
     ['pathfinding maze', 'proj:pathviz'],
-    ['is he available for an internship', ['about', 'contact']],
+
+    // --- must return nothing. These are what break during threshold tuning. ---
     ['does he know rust', null],
     ['asdfghjkl', null]
   ];

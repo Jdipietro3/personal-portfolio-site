@@ -3,6 +3,11 @@
 // of it in renderVals(), and search-index.js reads the same object to build the
 // retrieval index. Anything written directly into the markup instead of here is
 // invisible to search, so new prose belongs in this file.
+//
+// After editing this file, re-run build-vectors.html to refresh search-vectors.js.
+// Forgetting is safe — the vectors file stores a hash of the corpus and the site
+// falls back to embedding at runtime when it stops matching — but the first search
+// gets several seconds slower until you do.
 (function () {
   'use strict';
 
@@ -22,26 +27,49 @@
     about: {
       headline: '>> scanning subject: joseph_dipietro...',
       paragraphs: [
-        'A Computer Science mind drawn to the systems underneath other systems — compilers, distributed protocols, and the models that learn from them. Not much interested in the surface. More interested in what\'s running underneath it.'
+        'Computer Science at WPI, with a professional half and an academic half that keep pulling on each other. The day job has been production software with real customers behind it — a C#/.NET commerce platform wired straight into ERP systems, where a bad query is somebody\'s inventory. The coursework and the side projects are artificial intelligence and machine learning.',
+        'The part I actually care about is the seam between those two. Plenty of people can train a model; fewer have shipped anything on a deadline to a client who noticed. I\'m interested in what happens when you point real engineering discipline — reviews, tests, release pressure — at systems that learn instead of systems that merely run.'
       ],
-      status: '>> status: active_process · TA — Data Structures & Algorithms · signal open for summer \'27'
+      // TODO(joseph): confirm — assumes you're targeting full-time for after May 2027.
+      status: '>> status: active_process · SWE Intern @ MITRE · open to full-time SWE roles for 2027'
     },
 
     experience: [
-      { id: 'nsl', range: 'Jan 2025 – Present', role: 'Undergraduate Research Assistant', org: 'Neural Systems Lab', dotColor: '#fff3d0',
-        bullets: ['Trained and evaluated sequence models on a 40M-token internal corpus', 'Built the lab’s experiment-tracking harness, now used by six researchers', 'Co-authored a workshop paper on attention sparsity'],
-        tags: ['Python', 'PyTorch', 'Transformers'] },
-      { id: 'acme', range: 'Jun 2025 – Aug 2025', role: 'Software Engineering Intern', org: 'Acme Systems', dotColor: '#f8d488',
-        bullets: ['Built internal CI tooling that cut average build time by 30%', 'Shipped REST API endpoints consumed by four downstream teams', 'Raised integration test coverage from 62% to 88%'],
-        tags: ['Go', 'Docker', 'PostgreSQL'] },
-      { id: 'ta', range: 'Sep 2024 – Present', role: 'Teaching Assistant, Data Structures & Algorithms', org: 'University CS Department', dotColor: '#fff3d0',
-        bullets: ['Ran weekly office hours for 40+ students', 'Wrote and graded exam problems on trees, graphs, and DP', 'Led review sessions before midterms and finals'],
-        tags: ['Java', 'Teaching'] },
-      { id: 'riverbend', range: 'Jun 2024 – Aug 2024', role: 'Software Developer Intern', org: 'Riverbend Labs', dotColor: '#f8d488',
-        bullets: ['Migrated a legacy service to TypeScript, improving type safety', 'Implemented a caching layer that cut API latency by 40%', 'Partnered with design to ship a new internal dashboard'],
-        tags: ['TypeScript', 'React', 'Redis'] }
+      // MITRE work is pending public-release review, so this entry stays deliberately
+      // non-specific. Replace the bullets and tags once you know what you can describe.
+      { id: 'mitre', range: '2026 – Present', role: 'Software Engineering Intern', org: 'MITRE', dotColor: '#fff3d0',
+        // Bullets carry no trailing period: buildChunks joins them with '. ', so a
+        // period here produces 'team..' in the indexed text.
+        bullets: [
+          'Working as a software engineer on a federally funded research and development team',
+          'Project details are pending public release review — more to follow'
+        ],
+        tags: ['Software Engineering'] },
+
+      { id: 'dovetail', range: 'May 2024 – Present', role: 'Junior Software Developer', org: 'Dovetail Internet Technologies', dotColor: '#f8d488',
+        bullets: [
+          'Build and maintain features in CyberStore, a C#/.NET e-commerce platform that synchronises inventory, orders, and customer data directly with SYSPRO ERP systems',
+          'Work across the full stack of a large ASP.NET application — front-end behaviour in JavaScript and AJAX, business logic in C#, and the SQL underneath it',
+          'Deliver sponsored development projects in direct contact with clients, clarifying requirements and shipping to their deadlines',
+          // "academic year", not "school year": the latter put a second strong
+          // 'school' match in the experience section, which outranked Education on
+          // "where does he go to school".
+          'Started as a summer intern and stayed on part time through the academic year, running several concurrent assignments against sprint deadlines',
+          'Work in a professional Git workflow and agile ceremonies: daily scrums, sprint planning, and reviews'
+        ],
+        tags: ['C#', '.NET', 'SQL', 'JavaScript'] },
+
+      { id: 'mastercam', range: 'Jun 2022 – Aug 2022', role: 'Software Engineering Intern', org: 'Mastercam', dotColor: '#fff3d0',
+        bullets: [
+          'Contributed to pre-release development of Mastercam products as part of an agile scrum team',
+          'Worked daily with software engineers and quality control to identify, resolve, and verify defects',
+          'Worked inside a large C++ codebase under established engineering and testing practices'
+        ],
+        tags: ['C++', 'Scrum'] }
     ],
 
+    // TODO(joseph): still placeholder — the two real ones from the résumé are the
+    // Azure AI permit-gap analyser and the PyTorch RNN pop-music generator.
     projects: [
       { key: 'raft', name: 'kvstore-raft', featured: true,
         image: './img/kvstore-raft.svg', imageAlt: 'Diagram of a five-node cluster with one elected leader',
@@ -81,17 +109,21 @@
     ],
 
     skills: [
-      { id: 'languages', title: 'LANGUAGES', items: ['Python', 'TypeScript', 'Go', 'SQL', 'Java', 'C++'] },
-      { id: 'systems', title: 'SYSTEMS & INFRASTRUCTURE', items: ['Linux', 'Docker', 'PostgreSQL', 'Redis', 'gRPC', 'AWS'] },
-      { id: 'ml', title: 'MACHINE LEARNING', items: ['PyTorch', 'NumPy', 'CUDA', 'Transformers'] }
+      { id: 'languages', title: 'LANGUAGES', items: ['Python', 'C#', 'SQL', 'C++', 'C', 'JavaScript'] },
+      { id: 'frameworks', title: 'LIBRARIES & FRAMEWORKS', items: ['.NET Framework', 'ASP.NET', 'PyTorch', 'scikit-learn', 'Pandas', 'Flask', 'SQLAlchemy', 'pytest', 'DevExpress'] },
+      { id: 'practices', title: 'PRACTICES & TOOLS', items: ['REST APIs', 'Object-Oriented Design', 'Scrum / Agile', 'Git', 'Azure', 'Azure AI'] }
     ],
 
     skillsBlurb: 'The tools I work in. Where each one was used is on the roles and projects above.',
 
     education: {
-      institution: 'State University', degree: 'B.S. in Computer Science', focus: 'Systems & Artificial Intelligence',
-      graduation: 'Expected May 2026', gpa: '3.85 / 4.0', gpaPct: 96,
-      coursework: ['Algorithms', 'Operating Systems', 'Computer Networks', 'Machine Learning', 'Database Systems', 'Compilers']
+      institution: 'Worcester Polytechnic Institute',
+      degree: 'B.S. in Computer Science',
+      focus: 'Artificial Intelligence & Machine Learning',
+      graduation: 'Expected 2027',
+      honors: 'Dean\'s List (2023–present) · Presidential Scholarship',
+      gpa: '3.71 / 4.0', gpaPct: 93,
+      coursework: ['Machine Learning', 'Introduction to AI', 'Algorithms', 'Operating Systems', 'Database Systems', 'Software Engineering', 'Systems Programming', 'Object-Oriented Design', 'Machine Organization & Assembly', 'Linear Algebra', 'Probability & Statistics', 'Discrete Math']
     },
 
     // The contact section was pure markup before search existed; it lives here now so
@@ -100,10 +132,11 @@
       headline: '>> establish_connection()',
       blurb: 'Channel open. Send a signal, I\'ll respond.',
       searchBlurb: 'Get in touch by email, GitHub, or LinkedIn. My resume is available to download.',
-      email: 'joseph.dipietro@example.com',
+      email: 'jdipietro3@hotmail.com',
       links: [
+        // TODO(joseph): GitHub URL and a real resume.pdf still needed.
         { label: 'GitHub', href: '#' },
-        { label: 'LinkedIn', href: '#' },
+        { label: 'LinkedIn', href: 'https://www.linkedin.com/in/joseph-dipietro-6203a037a/' },
         { label: './resume.pdf', href: '#' }
       ],
       footer: '© 2026 Joseph DiPietro — built from scratch, compiled with care.'
@@ -111,9 +144,9 @@
 
     // Shown in the search palette before anything is typed.
     suggestions: [
-      'What has he built with Go?',
+      'What has he built with C#?',
       'Does he have machine learning experience?',
-      'Has he taught anyone?',
+      'Where does he go to school?',
       'How do I get in touch?'
     ]
   };

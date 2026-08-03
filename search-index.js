@@ -73,6 +73,13 @@
         if (t.length < 2 && !SHORT_OK[t] && !symbolic) continue;
         if (t.length === 2 && !SHORT_OK[t] && !symbolic) continue;
         out.push(SearchIndex.stem(t));
+        // 'e-commerce' and 'ecommerce' are the same word to a reader, so make them
+        // the same term to the index. Emitted at index *and* query time, which is
+        // the only property that matters. Restricted to all-alphabetic compounds so
+        // 'x86-64' and 'utf-8' aren't turned into junk tokens like 'x8664'.
+        if (/^[a-z]+(-[a-z]+)+$/.test(t)) {
+          out.push(SearchIndex.stem(t.replace(/-/g, '')));
+        }
       }
       return out;
     },
@@ -136,11 +143,20 @@
       content.experience.forEach(function (job) {
         var head = job.role + ' at ' + job.org + ', ' + job.range + '.';
         var tags = ' Skills: ' + job.tags.join(', ') + '.';
+        // Index-only vocabulary for "who does he work for right now" — same trick as
+        // the education and contact chunks below. Keyed off the range rather than
+        // array position, so it stays correct however the list is ordered, and so a
+        // role that ends stops claiming to be current the moment its range changes.
+        var current = /present|current/i.test(job.range)
+          // Deliberately no 'job' here: it is generic enough that adding it made the
+          // current role outrank the About section on "is he looking for a job".
+          ? ' Current role, currently working here, present position, where he works now.'
+          : '';
         push({
           id: 'exp:' + job.id, groupId: 'exp:' + job.id, kind: 'role', section: 'experience',
           anchorId: 'job-' + job.id, title: job.role, kicker: 'EXPERIENCE · ' + job.org,
           snippet: job.bullets[0],
-          text: head + ' ' + job.bullets.join('. ') + '.' + tags,
+          text: head + ' ' + job.bullets.join('. ') + '.' + tags + current,
           weight: 1.05
         });
         job.bullets.forEach(function (b, i) {
@@ -164,6 +180,16 @@
         // exist so "where does he go to school" and "what college" reach this chunk.
         text: edu.degree + ' at ' + edu.institution + ', focus ' + edu.focus + '. Graduating ' + edu.graduation
           + '. GPA ' + edu.gpa + '. Undergraduate student, university degree, school, college, major, studies.',
+        weight: 1.0
+      });
+      // Its own chunk rather than a line appended to the degree text, so a query for
+      // "dean's list" surfaces a row that actually says so. groupId keeps it collapsed
+      // with the rest of education, so it can never push the degree off the list.
+      push({
+        id: 'edu:honors', groupId: 'edu', kind: 'education', section: 'education', anchorId: 'education',
+        title: 'Honors',
+        snippet: edu.honors,
+        text: 'Academic honors and awards: ' + edu.honors + '. Scholarship, honor roll, distinction.',
         weight: 1.0
       });
       push({
