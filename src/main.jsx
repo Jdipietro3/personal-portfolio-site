@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 
 // Must run before anything can open the search palette. Sets window.loadTransformers.
 import './transformers-loader.js';
-import '../styles.css';
+import './styles.css';
 
 import Portfolio from './Portfolio.jsx';
 
