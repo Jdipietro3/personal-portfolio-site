@@ -8,13 +8,9 @@ import { SearchIndex } from './lib/search-index.js';
 import './lib/search-model.js';
 import './lib/search-vectors.js';
 
-const NAME_ASCII = [
-  "     __                  __     ___  _ ___  _     __         ",
-  " __ / /__  ___ ___ ___  / /    / _ \\(_) _ \\(_)__ / /________ ",
-  "/ // / _ \\(_-</ -_) _ \\/ _ \\  / // / / ___/ / -_) __/ __/ _ \\",
-  "\\___/\\___/___/\\__/ .__/_//_/ /____/_/_/  /_/\\__/\\__/_/  \\___/",
-  "                /_/                                          "
-].join('\n');
+// The banner lives in hero-grid.js, next to the geometry and mask code that measures
+// it — those have to agree on the exact glyph grid, so a second copy here could drift.
+const NAME_ASCII = HeroGrid.NAME_ASCII;
 
 // All content lives in content.js. SECTION_IDS replaces the ids array that used to be
 // copy-pasted into computeFlow, updateActive, and renderVals independently.
@@ -743,7 +739,7 @@ export default class Portfolio extends React.Component {
         </div>
 
         {/* FLOATING NAV PILL */}
-        <div className="nav-pill" style={navPillStyle} data-nav-style={navOpacity}>
+        <div className="nav-pill" style={navPillStyle}>
           {navItems.map((item, i) => <React.Fragment key={i}>
             <a href={item.href} onClick={item.onClick} className="nav-pill-item" style={{ color: item.color, background: item.bg }}>{item.label}</a>
           </React.Fragment>)}
