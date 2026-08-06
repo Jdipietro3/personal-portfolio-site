@@ -83,6 +83,9 @@ export default class Portfolio extends React.Component {
     this._searchDebounce = null;
     this._queryVecCache = new Map();
     this._searchInputRef = React.createRef();
+    // The nav pill's active marker is positioned imperatively — see syncNavIndicator().
+    this._navPillRef = React.createRef();
+    this._navIndicatorRef = React.createRef();
     this._searchTriggerEl = null;
     this._flashTimer = null;
     this._pendingScroll = null;
@@ -140,13 +143,26 @@ export default class Portfolio extends React.Component {
     // Web fonts change every section's height, which moves every track top. The
     // canvas already re-derives its geometry here; the pin tops have to as well.
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => { this.sizeCanvas(); this.remeasurePins(); });
+      // The pill's link widths are font-dependent, so the marker has to be
+      // re-measured once the real face lands — same reason as the canvas geometry.
+      document.fonts.ready.then(() => {
+        this.sizeCanvas();
+        this.remeasurePins();
+        this.syncNavIndicator(false);
+      });
     }
     this.startLoop();
     this.setState({ pinned: this.pinAllowed() });
+    this.syncNavIndicator(false);
   }
 
   componentDidUpdate(prevProps, prevState) {
+    // Only when something that moves the marker changed. prevState is why this
+    // is cheap — the old DCLogic shim only ever passed prevProps, so this had to
+    // wait for the React port.
+    if (prevState.active !== this.state.active) this.syncNavIndicator(true);
+    else if (prevState.winW !== this.state.winW) this.syncNavIndicator(false);
+
     // Track tops are only valid for the layout that produced them. Re-measure
     // when pinning turns on or off (which changes every track's height) and when
     // the window resizes (which changes both heights and wrapping above them).
@@ -189,6 +205,34 @@ export default class Portfolio extends React.Component {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this._geom = HeroGrid.geometry(w, h, NAME_ASCII.split('\n'));
     this._mask = HeroGrid.buildMask(NAME_ASCII.split('\n'), this._geom);
+  }
+
+  // Moves the nav pill's gold marker under the active section link. Written
+  // straight to the node rather than routed through state, for the same reason
+  // flashTarget() is: this component re-renders on every scroll event, and
+  // pushing one animated transform through that is a whole-page render to move a
+  // 60px box. Reading offsetLeft/offsetWidth here is a layout read, but it only
+  // happens when the active section or the window width actually changed.
+  syncNavIndicator(animate) {
+    const pill = this._navPillRef.current;
+    const bar = this._navIndicatorRef.current;
+    if (!pill || !bar) return;
+    const items = pill.querySelectorAll('[data-nav-item]');
+    const i = Math.max(0, SECTION_IDS.indexOf(this.state.active));
+    const a = items[i];
+    if (!a) return;
+    // .nav-pill is position:fixed, so it is the offsetParent and these are
+    // already pill-relative — no getBoundingClientRect arithmetic needed.
+    bar.style.transition = animate ? '' : 'none';
+    bar.style.width = a.offsetWidth + 'px';
+    bar.style.height = a.offsetHeight + 'px';
+    bar.style.transform = 'translate(' + a.offsetLeft + 'px, ' + a.offsetTop + 'px)';
+    if (!animate) {
+      // Flush the un-transitioned placement before re-arming, or the browser
+      // coalesces both writes and the marker slides in from the origin on load.
+      void bar.offsetWidth;
+      bar.style.transition = '';
+    }
   }
 
   // ---- pin engine ---------------------------------------------------------
@@ -622,8 +666,8 @@ export default class Portfolio extends React.Component {
       href: '#' + s.id,
       label: s.label,
       active: this.state.active === s.id,
+      // The gold background is the sliding .nav-indicator now, not a per-item fill.
       color: this.state.active === s.id ? '#08080a' : 'rgba(242,241,236,0.65)',
-      bg: this.state.active === s.id ? '#f8d488' : 'transparent',
       onClick: (e) => { e.preventDefault(); this.scrollToSection(s.id); }
     }));
 
@@ -893,9 +937,14 @@ export default class Portfolio extends React.Component {
         </div>
 
         {/* FLOATING NAV PILL */}
-        <div className="nav-pill" style={navPillStyle}>
+        <div className="nav-pill" style={navPillStyle} ref={this._navPillRef}>
+          {/* One marker that slides between the six section links, rather than six
+              backgrounds flipping on and off. Positioned by syncNavIndicator();
+              it carries no text, so it is decoration to assistive tech. Sized to
+              zero until the first measurement so it never flashes at full width. */}
+          <span className="nav-indicator" aria-hidden="true" ref={this._navIndicatorRef}></span>
           {navItems.map((item, i) => <React.Fragment key={i}>
-            <a href={item.href} onClick={item.onClick} className="nav-pill-item" style={{ color: item.color, background: item.bg }}>{item.label}</a>
+            <a href={item.href} onClick={item.onClick} data-nav-item className="nav-pill-item" style={{ color: item.color }}>{item.label}</a>
           </React.Fragment>)}
           <button className="search-trigger nav-search-trigger" onClick={openSearchFromNav} aria-label="Search this site" aria-keyshortcuts="Control+K Meta+K">
             <span aria-hidden="true" className="chevron-gold">&gt;</span>

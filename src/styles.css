@@ -101,7 +101,12 @@ a:hover { color: #ffb37a; }
 
 /* --- nav pill --- */
 .nav-pill { position: fixed; top: 22px; right: 24px; z-index: 80; display: flex; align-items: center; gap: 2px; background: rgba(16,16,18,0.75); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; padding: 6px 6px 6px 16px; }
-.nav-pill-item { padding: 8px 13px; border-radius: 999px; font-size: 12.5px; letter-spacing: 0.03em; }
+/* Items sit above the marker and only cross-fade their own colour; the gold
+   travels underneath. z-index needs position, hence relative. */
+.nav-pill-item { position: relative; z-index: 1; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; letter-spacing: 0.03em; transition: color 260ms var(--ease-out-quart); }
+/* width starts at 0 so the marker is invisible until syncNavIndicator() has
+   measured — a pill-shaped flash at the wrong size is worse than none. */
+.nav-indicator { position: absolute; left: 0; top: 0; width: 0; height: 0; border-radius: 999px; background: #f8d488; pointer-events: none; transition: transform 340ms var(--ease-out-expo), width 340ms var(--ease-out-expo); }
 .nav-search-trigger { display: flex; align-items: center; gap: 6px; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 6px 11px; margin-left: 4px; color: rgba(242,241,236,0.65); font-size: 12.5px; line-height: 1; }
 .btn-nav-resume { margin-left: 6px; background: #f8d488; color: #08080a; font-weight: 700; font-size: 12px; padding: 8px 16px; border-radius: 999px; }
 
