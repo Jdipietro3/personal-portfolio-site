@@ -175,11 +175,11 @@
       push({
         id: 'edu:degree', groupId: 'edu', kind: 'education', section: 'education', anchorId: 'education',
         title: edu.degree,
-        snippet: edu.degree + ' — ' + edu.institution + ', ' + edu.graduation + '. GPA ' + edu.gpa + '.',
+        snippet: edu.degree + ' — ' + edu.institution + ', ' + edu.graduation + '.',
         // The trailing synonyms are index-only vocabulary: they never display, they
         // exist so "where does he go to school" and "what college" reach this chunk.
         text: edu.degree + ' at ' + edu.institution + ', focus ' + edu.focus + '. Graduating ' + edu.graduation
-          + '. GPA ' + edu.gpa + '. Undergraduate student, university degree, school, college, major, studies.',
+          + '. Undergraduate student, university degree, school, college, major, studies.',
         weight: 1.0
       });
       // Its own chunk rather than a line appended to the degree text, so a query for

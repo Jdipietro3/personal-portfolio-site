@@ -122,7 +122,8 @@
       focus: 'Artificial Intelligence & Machine Learning',
       graduation: 'Expected 2027',
       honors: 'Dean\'s List (2023–present) · Presidential Scholarship',
-      gpa: '3.71 / 4.0', gpaPct: 93,
+      // No GPA here on purpose. It isn't displayed, and a field that only search
+      // can see is a field that answers a question the page then can't show you.
       coursework: ['Machine Learning', 'Introduction to AI', 'Algorithms', 'Operating Systems', 'Database Systems', 'Software Engineering', 'Systems Programming', 'Object-Oriented Design', 'Machine Organization & Assembly', 'Linear Algebra', 'Probability & Statistics', 'Discrete Math']
     },
 

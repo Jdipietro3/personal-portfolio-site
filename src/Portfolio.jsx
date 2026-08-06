@@ -29,11 +29,17 @@ function isTypingTarget(t) {
 // Native scroll throughout — nothing hijacks the wheel, so keyboard, trackpad,
 // touch and scrollToSection all keep working unchanged.
 
-// Scroll distance each step gets, in vh. This is the pacing dial for the whole
-// page: bigger reads as more deliberate, smaller as brisker. There are fourteen
-// steps across the five pinned sections, so every 10vh here is another 1.4
-// viewports of page. 42 puts a step at roughly one trackpad flick.
+// Two pacing dials, because pinned sections do two different jobs.
+//
+// STEP_VH is scroll distance per step, for sections you advance through — one
+// job, then the next; one project, then the next. 42 puts a step at roughly one
+// trackpad flick.
+//
+// REVEAL_VH is how long a one-shot section holds after its reveal has played.
+// Those sections don't advance: arriving triggers the whole animation, and this
+// is the beat the stage stays put afterwards so it lands rather than flicking by.
 const STEP_VH = 42;
+const REVEAL_VH = 60;
 
 // Matches the breakpoint the neural strip already uses. Below it we don't pin at
 // all — sticky + full-viewport heights are unreliable against mobile browser
@@ -47,18 +53,25 @@ const PIN_MIN_WIDTH = 900;
 // panning the stage. A short window falls back to plain flow instead.
 const PIN_MIN_HEIGHT = 680;
 
-// Steps per pinned section, data-driven wherever the section is a list so that
-// adding a job or a project lengthens its track instead of silently overflowing
-// the last step. Contact is deliberately absent: it's where someone acts, and it
-// should arrive normally with the footer reachable.
-const PIN_STEPS = {
-  about: 2,                             // panel arrives, then the status types
-  experience: CONTENT.experience.length, // one job on stage at a time
-  education: 2,                         // the record prints, then the GPA fills
-  projects: CONTENT.projects.length,    // one card on stage at a time
-  skills: CONTENT.skills.length         // one group at a time
+// What each pinned section does, and how much scroll it gets for it.
+//
+// A section with one step doesn't advance — it plays. Its single future→active
+// flip is the trigger, and everything inside sequences off that in CSS. A section
+// with several steps is one you move through, and only two sections earn that:
+// experience, whose three jobs cannot share a stage, and projects, whose rail
+// travels sideways as you go.
+//
+// Counts are data-driven so adding a job or a project lengthens that track
+// instead of silently overflowing its last step. Contact is deliberately absent:
+// it's where someone acts, and it should arrive normally with the footer reachable.
+const PIN_SPEC = {
+  about: { steps: 1, vh: REVEAL_VH },
+  experience: { steps: CONTENT.experience.length, vh: STEP_VH },
+  education: { steps: 1, vh: REVEAL_VH },
+  projects: { steps: CONTENT.projects.length, vh: STEP_VH },
+  skills: { steps: 1, vh: REVEAL_VH }
 };
-const PIN_IDS = Object.keys(PIN_STEPS);
+const PIN_IDS = Object.keys(PIN_SPEC);
 
 export default class Portfolio extends React.Component {
   constructor(props) {
@@ -108,6 +121,8 @@ export default class Portfolio extends React.Component {
     // load. Null means "not measured, don't pin" — every consumer treats that as
     // plain flow, so a failed measurement degrades to today's site.
     this._pinTops = null;
+    // { centres: number[], viewW } for the projects rail — see measureRail().
+    this._rail = null;
   }
 
   componentDidMount() {
@@ -256,10 +271,61 @@ export default class Portfolio extends React.Component {
     return true;
   }
 
-  // Height of a track in px: one viewport for the stage itself, plus STEP_VH of
-  // scroll distance per step to advance through.
+  // Height of a track in px: one viewport for the stage itself, plus that
+  // section's per-step distance for each step it has.
   pinTrackHeight(id) {
-    return this.state.winH * (100 + PIN_STEPS[id] * STEP_VH) / 100;
+    const spec = PIN_SPEC[id];
+    return this.state.winH * (100 + spec.steps * spec.vh) / 100;
+  }
+
+  // Where each project card sits along the rail, measured once per layout rather
+  // than per frame. Card widths differ — featured cards are wider — so centring
+  // one cannot be CSS arithmetic; it needs the real numbers. Same cache-then-do-
+  // arithmetic shape as _pinTops, so the scroll handler still reads no layout.
+  measureRail() {
+    const rail = document.querySelector('#projects .proj-rail');
+    if (!rail) { this._rail = null; return false; }
+    const cards = rail.querySelectorAll(':scope > .proj-card');
+    // A count mismatch means the rail isn't laid out the way the engine thinks it
+    // is, and centring against it would put cards anywhere. Treat it as a failure.
+    if (cards.length !== PIN_SPEC.projects.steps) { this._rail = null; return false; }
+    const centres = [];
+    // .proj-rail is position:relative while pinned, so it is the offsetParent and
+    // these are rail-relative without any rect arithmetic.
+    cards.forEach((c) => centres.push(c.offsetLeft + c.offsetWidth / 2));
+    const viewport = rail.parentElement;
+    if (!viewport) { this._rail = null; return false; }
+    this._rail = { centres, viewW: viewport.clientWidth };
+    return true;
+  }
+
+  // Puts card `i` at the centre of the rail by scrolling the page to that card's
+  // point along the projects track. Focus and the rail must never disagree: a
+  // card that has keyboard focus but sits off the side of the stage is a card
+  // nobody can see they are on.
+  scrollRailTo(i) {
+    if (!this.state.pinned || !this._pinTops) return;
+    const steps = PIN_SPEC.projects.steps;
+    if (steps < 2) return;
+    const p = Math.max(0, Math.min(1, i / (steps - 1)));
+    const span = Math.max(1, this.pinTrackHeight('projects') - window.innerHeight);
+    window.scrollTo({ top: Math.round(this._pinTops.projects + span * p), behavior: 'auto' });
+  }
+
+  // Horizontal offset that puts the current point along the rail dead centre.
+  // Interpolating between neighbouring card centres rather than snapping to one
+  // is what makes the rail travel continuously while each card still lands
+  // centred exactly at its own step.
+  computeRail(p) {
+    const rail = this._rail;
+    if (!rail || p == null) return null;
+    const c = rail.centres;
+    if (c.length === 0) return null;
+    if (c.length === 1) return rail.viewW / 2 - c[0];
+    const pos = p * (c.length - 1);
+    const i = Math.min(c.length - 2, Math.floor(pos));
+    const t = pos - i;
+    return rail.viewW / 2 - (c[i] + (c[i + 1] - c[i]) * t);
   }
 
   // The only layout read the pin engine ever does, and it happens on mount,
@@ -288,6 +354,14 @@ export default class Portfolio extends React.Component {
       tops[id] = el.getBoundingClientRect().top + window.scrollY;
     }
     this._pinTops = tops;
+    // The rail is measured under the same all-or-nothing rule. A rail that can't
+    // be measured would sit at offset zero with its first card jammed against the
+    // left edge and no way to reach the rest — worse than not pinning.
+    if (!this.measureRail()) {
+      this._pinTops = null;
+      this._safeSetState({ pinned: false, pins: null });
+      return;
+    }
     this._safeSetState({ pins: this.computePins() });
   }
 
@@ -305,7 +379,7 @@ export default class Portfolio extends React.Component {
     const y = window.scrollY, vh = window.innerHeight;
     const out = {};
     for (const id of PIN_IDS) {
-      const steps = PIN_STEPS[id];
+      const steps = PIN_SPEC[id].steps;
       // The stage is stuck from the track's top until its bottom reaches the
       // viewport bottom; that window is the whole span of travel.
       const span = Math.max(1, this.pinTrackHeight(id) - vh);
@@ -320,6 +394,9 @@ export default class Portfolio extends React.Component {
       const step = !entered ? -1 : raw >= steps ? steps - 1 : Math.floor(raw);
       out[id] = { p, step, sp: raw >= steps ? 1 : raw - step };
     }
+    // Projects rides its track sideways rather than swapping, so it carries one
+    // extra number: how far along the rail we are, in px.
+    out.projects.railX = out.projects.step < 0 ? this.computeRail(0) : this.computeRail(out.projects.p);
     return out;
   }
 
@@ -682,7 +759,7 @@ export default class Portfolio extends React.Component {
       const d = pinned && pinData ? pinData[id] : null;
       const swap = mode === 'swap';
       return {
-        steps: PIN_STEPS[id],
+        steps: PIN_SPEC[id].steps,
         trackStyle: pinned ? { height: Math.round(this.pinTrackHeight(id)) + 'px' } : null,
         stageStyle: d ? { '--pin-progress': d.p.toFixed(4), '--step-progress': d.sp.toFixed(4) } : null,
         // 'past' — already arrived and still standing. 'active' — on stage now.
@@ -695,8 +772,19 @@ export default class Portfolio extends React.Component {
     const pAbout = pin('about', 'accumulate');
     const pExp = pin('experience', 'swap');
     const pEdu = pin('education', 'accumulate');
-    const pProj = pin('projects', 'swap');
+    // 'accumulate', not 'swap': every card stays visible on the rail, so none of
+    // them may be inert. That is also what restores the Tab route through all of
+    // them, which one-card-per-stage had narrowed to whichever card was on screen.
+    const pProj = pin('projects', 'accumulate');
     const pSkills = pin('skills', 'accumulate');
+    // The rail's own offset. Null whenever pinning is off, which leaves the plain
+    // grid in charge rather than a transform on a non-existent rail.
+    const railData = pinned && pinData ? pinData.projects : null;
+    const railStyle = railData && railData.railX != null
+      ? { '--rail-x': railData.railX.toFixed(1) + 'px' } : null;
+    // Which card is nearest centre, for emphasis. -1 before the track is entered.
+    const railFocus = railData && railData.step >= 0
+      ? Math.round(railData.p * (PIN_SPEC.projects.steps - 1)) : -1;
 
     const ids = SECTION_IDS;
     const navItems = CONTENT.sections.map((s) => ({
