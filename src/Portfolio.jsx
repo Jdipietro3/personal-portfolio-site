@@ -22,6 +22,35 @@ function isTypingTarget(t) {
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
 }
 
+// ---- pin engine ----------------------------------------------------------
+// A pinned section is a tall scroll *track* holding a position:sticky *stage*.
+// The stage holds still on screen while the scroll distance below it advances
+// the stage's contents, so elements arrive in place rather than sliding past.
+// Native scroll throughout — nothing hijacks the wheel, so keyboard, trackpad,
+// touch and scrollToSection all keep working unchanged.
+
+// Scroll distance each step gets, in vh. This is the pacing dial for the whole page:
+// bigger reads as more deliberate, smaller as brisker.
+const STEP_VH = 55;
+
+// Matches the breakpoint the neural strip already uses. Below it we don't pin at
+// all — sticky + full-viewport heights are unreliable against mobile browser
+// chrome, and a long pinned sequence is worse on a phone than a plain scroll.
+const PIN_MIN_WIDTH = 900;
+
+// Steps per pinned section, data-driven wherever the section is a list so that
+// adding a job or a project lengthens its track instead of silently overflowing
+// the last step. Contact is deliberately absent: it's where someone acts, and it
+// should arrive normally with the footer reachable.
+const PIN_STEPS = {
+  about: 2,                             // panel arrives, then the status types
+  experience: CONTENT.experience.length, // one job on stage at a time
+  education: 2,                         // the record prints, then the GPA fills
+  projects: CONTENT.projects.length,    // one card on stage at a time
+  skills: CONTENT.skills.length         // one group at a time
+};
+const PIN_IDS = Object.keys(PIN_STEPS);
+
 export default class Portfolio extends React.Component {
   constructor(props) {
     super(props);
@@ -38,7 +67,12 @@ export default class Portfolio extends React.Component {
       searchResults: [],
       searchSel: -1,
       searchMode: 'idle',  // idle | loading | embedding | ready | failed
-      searchProgress: 0    // 0..1, drives the fill on the mode chip
+      searchProgress: 0,   // 0..1, drives the fill on the mode chip
+      // Pinning is opt-in and starts off, so the very first paint is today's
+      // plain document with every step present. It only switches on once the
+      // engine has decided the viewport allows it and has measured the tracks.
+      pinned: false,
+      pins: null           // { [id]: { p, step, sp } } once measured
     };
     // Search internals live off state: none of them should trigger a render, and
     // renderVals() runs on every scroll event.
@@ -58,15 +92,19 @@ export default class Portfolio extends React.Component {
     this._mask = null;
     this._reduceMotion = typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    // Document-space top of each pinned track, measured on mount / resize / font
+    // load. Null means "not measured, don't pin" — every consumer treats that as
+    // plain flow, so a failed measurement degrades to today's site.
+    this._pinTops = null;
   }
 
   componentDidMount() {
     this.onScroll = () => {
-      this.setState({ scrollY: window.scrollY, flow: this.computeFlow() });
+      this.setState({ scrollY: window.scrollY, flow: this.computeFlow(), pins: this.computePins() });
       this.updateActive();
     };
     this.onResize = () => {
-      this.setState({ winW: window.innerWidth, winH: window.innerHeight });
+      this.setState({ winW: window.innerWidth, winH: window.innerHeight, pinned: this.pinAllowed() });
       this.sizeCanvas();
     };
     window.addEventListener('scroll', this.onScroll, { passive: true });
@@ -92,9 +130,31 @@ export default class Portfolio extends React.Component {
       }
     };
     window.addEventListener('keydown', this.onKeyDown);
+    // Toggling the OS setting has to unpin live, not on next reload: a pinned
+    // stage is exactly the thing someone reaching for reduce-motion wants gone.
+    this.onMotionPrefChange = () => this._safeSetState({ pinned: this.pinAllowed() });
+    if (this._reduceMotion && this._reduceMotion.addEventListener) {
+      this._reduceMotion.addEventListener('change', this.onMotionPrefChange);
+    }
     this.sizeCanvas();
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.sizeCanvas());
+    // Web fonts change every section's height, which moves every track top. The
+    // canvas already re-derives its geometry here; the pin tops have to as well.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => { this.sizeCanvas(); this.remeasurePins(); });
+    }
     this.startLoop();
+    this.setState({ pinned: this.pinAllowed() });
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    // Track tops are only valid for the layout that produced them. Re-measure
+    // when pinning turns on or off (which changes every track's height) and when
+    // the window resizes (which changes both heights and wrapping above them).
+    if (prevState.pinned !== this.state.pinned ||
+        prevState.winW !== this.state.winW ||
+        prevState.winH !== this.state.winH) {
+      this.remeasurePins();
+    }
   }
 
   componentWillUnmount() {
@@ -102,6 +162,9 @@ export default class Portfolio extends React.Component {
     window.removeEventListener('scroll', this.onScroll);
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
+    if (this._reduceMotion && this._reduceMotion.removeEventListener) {
+      this._reduceMotion.removeEventListener('change', this.onMotionPrefChange);
+    }
     document.body.style.overflow = this._prevOverflow || '';
     if (this._raf) cancelAnimationFrame(this._raf);
     clearTimeout(this._searchDebounce);
@@ -126,6 +189,65 @@ export default class Portfolio extends React.Component {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this._geom = HeroGrid.geometry(w, h, NAME_ASCII.split('\n'));
     this._mask = HeroGrid.buildMask(NAME_ASCII.split('\n'), this._geom);
+  }
+
+  // ---- pin engine ---------------------------------------------------------
+
+  pinAllowed() {
+    if (typeof window === 'undefined') return false;
+    if (window.innerWidth < PIN_MIN_WIDTH) return false;
+    if (this._reduceMotion && this._reduceMotion.matches) return false;
+    return true;
+  }
+
+  // Height of a track in px: one viewport for the stage itself, plus STEP_VH of
+  // scroll distance per step to advance through.
+  pinTrackHeight(id) {
+    return this.state.winH * (100 + PIN_STEPS[id] * STEP_VH) / 100;
+  }
+
+  // The only layout read the pin engine ever does, and it happens on mount,
+  // resize, and font load — never per scroll. Everything after this is
+  // arithmetic on scrollY, so the scroll handler gains no forced reflows.
+  remeasurePins() {
+    if (!this.state.pinned) {
+      this._pinTops = null;
+      if (this.state.pins) this._safeSetState({ pins: null });
+      return;
+    }
+    const tops = {};
+    for (const id of PIN_IDS) {
+      const el = document.getElementById(id);
+      // All-or-nothing: a partial measurement would pin some sections against
+      // stale numbers, which looks far worse than not pinning at all.
+      if (!el) { this._pinTops = null; this._safeSetState({ pins: null }); return; }
+      tops[id] = el.getBoundingClientRect().top + window.scrollY;
+    }
+    this._pinTops = tops;
+    this._safeSetState({ pins: this.computePins() });
+  }
+
+  // Per-track progress and step index. `p` is 0..1 across the whole track, `step`
+  // is the index currently on stage, and `sp` is 0..1 within that step for
+  // effects that need to be continuous rather than discrete.
+  computePins() {
+    const tops = this._pinTops;
+    if (!tops) return null;
+    const y = window.scrollY, vh = window.innerHeight;
+    const out = {};
+    for (const id of PIN_IDS) {
+      const steps = PIN_STEPS[id];
+      // The stage is stuck from the track's top until its bottom reaches the
+      // viewport bottom; that window is the whole span of travel.
+      const span = Math.max(1, this.pinTrackHeight(id) - vh);
+      const p = Math.max(0, Math.min(1, (y - tops[id]) / span));
+      const raw = p * steps;
+      // At p === 1 the floor would land one past the end. Hold the last step
+      // instead, with sp saturated, so the final frame doesn't snap backwards.
+      const step = raw >= steps ? steps - 1 : Math.floor(raw);
+      out[id] = { p, step, sp: raw >= steps ? 1 : raw - step };
+    }
+    return out;
   }
 
   computeFlow() {
@@ -361,8 +483,12 @@ export default class Portfolio extends React.Component {
   // animate one box-shadow.
   flashTarget(id) {
     if (this._reduceMotion && this._reduceMotion.matches) return;
-    const el = document.getElementById(id);
-    if (!el) return;
+    const section = document.getElementById(id);
+    if (!section) return;
+    // A pinned track is several viewports tall, so flashing the section itself
+    // would tint a box mostly off screen. The stage is what the visitor is
+    // actually looking at when they land.
+    const el = section.querySelector(':scope > .pin-stage') || section;
     clearTimeout(this._flashTimer);
     el.classList.remove('flash-target');
     void el.offsetWidth;               // force reflow so a repeat flash restarts
@@ -465,6 +591,30 @@ export default class Portfolio extends React.Component {
     const navPillStyle = { opacity: navOpacity, pointerEvents: navOpacity > 0.5 ? 'auto' : 'none' };
     // spacer covers phase A only — the content then scrolls in *during* the name's dock
     const heroSpacerStyle = { position: 'relative', height: (this.state.winH + phaseAPx) + 'px', width: '100%' };
+
+    // --- pin engine render contract ---
+    // pin(id) hands each pinned section everything it needs and nothing else:
+    // the track height, the custom properties the stage exposes, and a per-step
+    // state. When pinning is off — narrow viewport, reduce-motion, or a failed
+    // measurement — every step reports 'active', which is the finished state, so
+    // the section renders as today's plain document with all of it visible.
+    const pinned = this.state.pinned;
+    const pinData = this.state.pins;
+    const pin = (id) => {
+      const d = pinned && pinData ? pinData[id] : null;
+      return {
+        steps: PIN_STEPS[id],
+        trackStyle: pinned ? { height: Math.round(this.pinTrackHeight(id)) + 'px' } : null,
+        stageStyle: d ? { '--pin-progress': d.p.toFixed(4), '--step-progress': d.sp.toFixed(4) } : null,
+        // 'past' — already arrived and still standing. 'active' — on stage now.
+        // 'future' — not yet reached. Accumulating sections keep past visible;
+        // swapping sections show only active.
+        at: (i) => (!d ? 'active' : i < d.step ? 'past' : i === d.step ? 'active' : 'future'),
+        // Focus must never land in something nobody can see. `inert` also blocks
+        // clicks and removes the subtree from the accessibility tree.
+        inert: (i) => (d && i > d.step ? '' : undefined)
+      };
+    };
 
     const ids = SECTION_IDS;
     const navItems = CONTENT.sections.map((s) => ({
@@ -699,7 +849,7 @@ export default class Portfolio extends React.Component {
     };
 
     return (
-      <div className="page-root">
+      <div className={pinned ? 'page-root js-pin' : 'page-root'}>
 
         <canvas ref={this.canvasRef} className="bg-canvas"></canvas>
 

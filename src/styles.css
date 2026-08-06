@@ -6,6 +6,12 @@
    focus rings) against a dark page. The -webkit- rules cover Chromium versions
    predating standard scrollbar-color support. */
 html { color-scheme: dark; scrollbar-color: rgba(242,241,236,0.22) transparent; }
+/* Motion tokens. Every animated property on this page names one of these — no CSS
+   default easing, and nothing that overshoots: this is a terminal, not a toy. */
+:root {
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(242,241,236,0.18); border-radius: 999px; }
@@ -43,8 +49,43 @@ a:hover { color: #ffb37a; }
 .section-title { margin-top: 0; font-size: 28px; font-weight: 700; margin-bottom: 48px; }
 .section-title--tight { margin-bottom: 12px; }
 .content-wrap { position: relative; z-index: 10; background: #08080a; }
-.page-root { position: relative; background: #08080a; min-height: 100vh; color: #f2f1ec; overflow-x: hidden; }
+/* overflow-x:clip, not hidden. `hidden` on one axis silently computes the other
+   to `auto`, which makes .page-root a scroll container — and position:sticky
+   inside a scroll container sticks to *that*, not the viewport, so every pinned
+   stage would quietly stop working. `clip` bounds the same overflow without
+   creating a scrollport. */
+.page-root { position: relative; background: #08080a; min-height: 100vh; color: #f2f1ec; overflow-x: clip; }
 .bg-canvas { position: fixed; inset: 0; z-index: 0; display: block; pointer-events: none; }
+
+/* --- pin engine ---
+   A pinned section is a tall track (height set inline by the engine) holding a
+   sticky stage. Everything here is gated behind .js-pin, which the engine only
+   adds once it has decided the viewport allows pinning AND measured the tracks.
+   Without that class this whole block is inert and the sections are exactly the
+   plain document they were before — that is the fallback, not an afterthought.
+
+   Wrapped in no-preference rather than undone later in the reduced-motion block:
+   unpinning by override means fighting `.js-pin .pin-track` with equal specificity
+   and hand-restoring each section's original padding. Not applying the rules at
+   all leaves the untouched `.section` cascade in charge, which is the same result
+   with nothing to keep in sync. */
+@media (prefers-reduced-motion: no-preference) {
+.js-pin .pin-track { max-width: none; padding: 0; }
+.js-pin .pin-stage {
+  position: sticky; top: 0;
+  /* svh, not vh: on mobile browsers vh is the *largest* viewport and a 100vh
+     stage would sit partly under the retracted URL bar. Moot above 900px today,
+     correct if the breakpoint ever moves. */
+  height: 100svh;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.js-pin .pin-inner { width: 100%; max-width: 900px; margin: 0 auto; padding: 0 24px; }
+.js-pin .section--wide .pin-inner { max-width: 1100px; }
+/* Steps that haven't arrived. visibility:hidden rather than opacity alone so they
+   are out of the accessibility tree and untabbable even if a section's own rules
+   forget; the engine also marks them inert. */
+.js-pin .pin-step[data-pin="future"] { visibility: hidden; }
+}
 
 /* --- hero --- */
 .ascii-name { font-family: 'JetBrains Mono', monospace; font-weight: 800; line-height: 1; letter-spacing: 0; color: #f2f1ec; white-space: pre; user-select: none; margin: 0; border-radius: 4px; text-shadow: 0 2px 18px rgba(0,0,0,0.8); }
@@ -208,4 +249,14 @@ a:hover { color: #ffb37a; }
     transition-duration: 0.01ms !important;
   }
   .proj-card:hover { transform: none; }
+
+  /* Reduced motion must UNPIN, not merely zero the durations: a stage left sticky
+     at 100svh with every step revealed would clip whatever is taller than the
+     viewport, with no way to reach it. The sticky/height rules live in a
+     no-preference block so they simply don't apply here; the only thing left to
+     undo is the inline track height the engine writes, and the engine already
+     stops writing it — pinAllowed() returns false under this preference and
+     re-runs on change. This is the belt to that braces. */
+  .pin-track { height: auto !important; }
+  .pin-step[data-pin="future"] { visibility: visible !important; }
 }
