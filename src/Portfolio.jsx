@@ -40,6 +40,13 @@ const STEP_VH = 42;
 // chrome, and a long pinned sequence is worse on a phone than a plain scroll.
 const PIN_MIN_WIDTH = 900;
 
+// A stage is one viewport tall and has to hold its section's tallest step. The
+// two tightest are education and projects, which measure ~643px on a 900px-wide
+// window; below ~680px of viewport they would overflow the stage and the excess
+// would be unreachable, since the track scroll advances steps rather than
+// panning the stage. A short window falls back to plain flow instead.
+const PIN_MIN_HEIGHT = 680;
+
 // Steps per pinned section, data-driven wherever the section is a list so that
 // adding a job or a project lengthens its track instead of silently overflowing
 // the last step. Contact is deliberately absent: it's where someone acts, and it
@@ -109,6 +116,8 @@ export default class Portfolio extends React.Component {
       this.updateActive();
     };
     this.onResize = () => {
+      // pinAllowed() reads window.innerWidth/innerHeight directly, not state, so
+      // it is already looking at the new size when this runs.
       this.setState({ winW: window.innerWidth, winH: window.innerHeight, pinned: this.pinAllowed() });
       this.sizeCanvas();
     };
@@ -242,6 +251,7 @@ export default class Portfolio extends React.Component {
   pinAllowed() {
     if (typeof window === 'undefined') return false;
     if (window.innerWidth < PIN_MIN_WIDTH) return false;
+    if (window.innerHeight < PIN_MIN_HEIGHT) return false;
     if (this._reduceMotion && this._reduceMotion.matches) return false;
     return true;
   }
