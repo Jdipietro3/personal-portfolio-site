@@ -29,9 +29,11 @@ function isTypingTarget(t) {
 // Native scroll throughout — nothing hijacks the wheel, so keyboard, trackpad,
 // touch and scrollToSection all keep working unchanged.
 
-// Scroll distance each step gets, in vh. This is the pacing dial for the whole page:
-// bigger reads as more deliberate, smaller as brisker.
-const STEP_VH = 55;
+// Scroll distance each step gets, in vh. This is the pacing dial for the whole
+// page: bigger reads as more deliberate, smaller as brisker. There are fourteen
+// steps across the five pinned sections, so every 10vh here is another 1.4
+// viewports of page. 42 puts a step at roughly one trackpad flick.
+const STEP_VH = 42;
 
 // Matches the breakpoint the neural strip already uses. Below it we don't pin at
 // all — sticky + full-viewport heights are unreliable against mobile browser
@@ -274,6 +276,11 @@ export default class Portfolio extends React.Component {
   // Per-track progress and step index. `p` is 0..1 across the whole track, `step`
   // is the index currently on stage, and `sp` is 0..1 within that step for
   // effects that need to be continuous rather than discrete.
+  //
+  // `step` is -1 before the track has been reached, which is what makes the
+  // first step's entrance play at all: progress clamps at 0, so without this
+  // every section's step 0 would already be on stage from page load and would
+  // simply be *there* when you arrived rather than arriving.
   computePins() {
     const tops = this._pinTops;
     if (!tops) return null;
@@ -285,10 +292,14 @@ export default class Portfolio extends React.Component {
       // viewport bottom; that window is the whole span of travel.
       const span = Math.max(1, this.pinTrackHeight(id) - vh);
       const p = Math.max(0, Math.min(1, (y - tops[id]) / span));
+      // Step 0 arrives while the stage is still rising into view rather than at
+      // the instant it locks, so the visitor doesn't watch an empty stage climb
+      // a whole viewport first. 0.6 puts it a little past halfway up.
+      const entered = y > tops[id] - vh * 0.6;
       const raw = p * steps;
       // At p === 1 the floor would land one past the end. Hold the last step
       // instead, with sp saturated, so the final frame doesn't snap backwards.
-      const step = raw >= steps ? steps - 1 : Math.floor(raw);
+      const step = !entered ? -1 : raw >= steps ? steps - 1 : Math.floor(raw);
       out[id] = { p, step, sp: raw >= steps ? 1 : raw - step };
     }
     return out;
@@ -644,21 +655,30 @@ export default class Portfolio extends React.Component {
     // the section renders as today's plain document with all of it visible.
     const pinned = this.state.pinned;
     const pinData = this.state.pins;
-    const pin = (id) => {
+    // `mode` is 'accumulate' (past steps stay on stage) or 'swap' (only the
+    // active step is on stage). It exists purely so inert() knows whether a past
+    // step is still visible: in a swap section it is not, and something nobody
+    // can see must not be clickable or reachable by Tab — the project cards are
+    // role=button and tabIndex=0, so this is a real leak, not a theoretical one.
+    const pin = (id, mode) => {
       const d = pinned && pinData ? pinData[id] : null;
+      const swap = mode === 'swap';
       return {
         steps: PIN_STEPS[id],
         trackStyle: pinned ? { height: Math.round(this.pinTrackHeight(id)) + 'px' } : null,
         stageStyle: d ? { '--pin-progress': d.p.toFixed(4), '--step-progress': d.sp.toFixed(4) } : null,
         // 'past' — already arrived and still standing. 'active' — on stage now.
-        // 'future' — not yet reached. Accumulating sections keep past visible;
-        // swapping sections show only active.
+        // 'future' — not yet reached, including everything before the track has
+        // been entered at all (step -1).
         at: (i) => (!d ? 'active' : i < d.step ? 'past' : i === d.step ? 'active' : 'future'),
-        // Focus must never land in something nobody can see. `inert` also blocks
-        // clicks and removes the subtree from the accessibility tree.
-        inert: (i) => (d && i > d.step ? '' : undefined)
+        inert: (i) => (d && (swap ? i !== d.step : i > d.step) ? '' : undefined)
       };
     };
+    const pAbout = pin('about', 'accumulate');
+    const pExp = pin('experience', 'swap');
+    const pEdu = pin('education', 'accumulate');
+    const pProj = pin('projects', 'swap');
+    const pSkills = pin('skills', 'accumulate');
 
     const ids = SECTION_IDS;
     const navItems = CONTENT.sections.map((s) => ({
@@ -704,6 +724,10 @@ export default class Portfolio extends React.Component {
 
     const featuredProjects = projects.filter((p) => p.featured);
     const gridProjects = projects.filter((p) => !p.featured);
+    // Reads 01..05 while a card is on stage and 00 before the track is entered,
+    // which is the honest answer rather than pretending the first one is up.
+    const projActive = projects.findIndex((_, i) => pProj.at(i) === 'active');
+    const projCounter = String(projActive + 1).padStart(2, '0');
 
     const openProj = this.state.openProject != null ? projects.find((p) => p.key === this.state.openProject) : null;
     const modal = openProj ? {
@@ -963,95 +987,142 @@ export default class Portfolio extends React.Component {
 
         <div className="content-wrap">
 
-          {/* ABOUT */}
-          <section id="about" className="section section--about">
-            <div className="section-kicker">SYS.01 // IDENTITY</div>
-            <h2 className="sr-only">About</h2>
-            <div className="panel">
-              <div className="panel-titlebar">
-                <div className="titlebar-dot"></div>
-                <div className="titlebar-dot"></div>
-                <div className="titlebar-dot"></div>
-                <div className="titlebar-label">identity.log</div>
-              </div>
-              <div className="about-body">
-                <div className="text-cream">{about.headline}</div>
-                {about.paragraphs.map((para, i) => <React.Fragment key={i}>
-                  <p className="about-para">{para}</p>
-                </React.Fragment>)}
-                <p className="about-status">{about.status}<span className="blink-cursor">_</span></p>
+          {/* ABOUT — accumulate: the console opens, then it logs a line. */}
+          <section id="about" className="section section--about pin-track" style={pAbout.trackStyle}>
+            <div className="pin-stage" style={pAbout.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.01 // IDENTITY</div>
+                <h2 className="sr-only">About</h2>
+                <div className="panel">
+                  <div className="pin-step about-step-titlebar" data-pin={pAbout.at(0)} inert={pAbout.inert(0)}>
+                    <div className="panel-titlebar">
+                      <div className="titlebar-dot"></div>
+                      <div className="titlebar-dot"></div>
+                      <div className="titlebar-dot"></div>
+                      <div className="titlebar-label">identity.log</div>
+                    </div>
+                  </div>
+                  <div className="about-body">
+                    <div className="pin-step about-step-body" data-pin={pAbout.at(0)} inert={pAbout.inert(0)}>
+                      <div className="text-cream">{about.headline}</div>
+                      {about.paragraphs.map((para, i) => <React.Fragment key={i}>
+                        <p className="about-para">{para}</p>
+                      </React.Fragment>)}
+                    </div>
+                    <div className="pin-step about-step-status" data-pin={pAbout.at(1)} inert={pAbout.inert(1)}>
+                      {/* The status is a log line, so it types out. The reveal is
+                          scroll-linked rather than timed: you scrub it out, which
+                          is both more interesting and needs no timer to clean up. */}
+                      <p className="about-status">
+                        <span className="about-status-wrap">
+                          <span className="about-status-type">{about.status}</span>
+                          <span className="blink-cursor about-status-cursor">_</span>
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
-          {/* EXPERIENCE */}
-          <section id="experience" className="section">
-            <div className="section-kicker">SYS.02 // EXPERIENCE</div>
-            <h2 className="section-title">Work Experience</h2>
-            <div className="timeline">
-              {experience.map((job, i) => <React.Fragment key={i}>
-                <div id={`job-${job.id}`} className="timeline-item">
-                  <div className="timeline-dot" style={{ background: job.dotColor }}></div>
-                  <div className="timeline-range">{job.range}</div>
-                  <div className="timeline-role">{job.role}</div>
-                  <div className="timeline-org" style={{ color: job.dotColor }}>{job.org}</div>
-                  <div className="timeline-bullets">
-                    {job.bullets.map((b, i) => <React.Fragment key={i}>
-                      <div className="timeline-bullet">
-                        <span className="bullet-marker">›</span>{b}
+          {/* EXPERIENCE — swap: one job on stage, the rail beside it showing
+              where you are. The three jobs total more than a viewport, so they
+              cannot coexist on a pinned stage; swapping is what makes it work. */}
+          <section id="experience" className="section pin-track" style={pExp.trackStyle}>
+            <div className="pin-stage" style={pExp.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.02 // EXPERIENCE</div>
+                <h2 className="section-title">Work Experience</h2>
+                <div className="timeline exp-timeline">
+                  {/* The rail persists across the whole track. It is a position
+                      indicator, and the per-item dots below say the same thing,
+                      so those are hidden while pinned rather than duplicated. */}
+                  <div className="exp-rail" aria-hidden="true">
+                    {experience.map((job, i) => <React.Fragment key={job.id}>
+                      <div className="exp-rail-dot" data-pin={pExp.at(i)} style={{ '--dot-color': job.dotColor }}></div>
+                    </React.Fragment>)}
+                  </div>
+                  <div className="exp-stack">
+                    {experience.map((job, i) => <React.Fragment key={i}>
+                      <div id={`job-${job.id}`} className="timeline-item pin-step exp-step" data-pin={pExp.at(i)} inert={pExp.inert(i)}>
+                        <div className="timeline-dot" style={{ background: job.dotColor }}></div>
+                        <div className="timeline-range">{job.range}</div>
+                        <div className="timeline-role">{job.role}</div>
+                        <div className="timeline-org" style={{ color: job.dotColor }}>{job.org}</div>
+                        <div className="timeline-bullets">
+                          {job.bullets.map((b, i) => <React.Fragment key={i}>
+                            <div className="timeline-bullet">
+                              <span className="bullet-marker">›</span>{b}
+                            </div>
+                          </React.Fragment>)}
+                        </div>
+                        <div className="tag-row">
+                          {job.tags.map((tag, i) => <React.Fragment key={i}>
+                            <span className="tag">{tag}</span>
+                          </React.Fragment>)}
+                        </div>
                       </div>
                     </React.Fragment>)}
                   </div>
-                  <div className="tag-row">
-                    {job.tags.map((tag, i) => <React.Fragment key={i}>
-                      <span className="tag">{tag}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* EDUCATION — accumulate: the record prints, then the GPA fills.
+              pin-step goes straight onto the two grid children rather than onto
+              wrappers around them, so .edu-json keeps being the grid cell and its
+              full-height divider border still spans the row. */}
+          <section id="education" className="section pin-track" style={pEdu.trackStyle}>
+            <div className="pin-stage" style={pEdu.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.03 // EDUCATION</div>
+                <h2 className="section-title">Education</h2>
+                <div className="edu-grid">
+                  <div className="edu-json pin-step" data-pin={pEdu.at(0)} inert={pEdu.inert(0)}>
+                    <div style={{ '--i': 0 }}><span className="edu-punct">{'{'}</span></div>
+                    <div className="edu-field" style={{ '--i': 1 }}><span className="edu-key">"institution"</span>: <span className="text-gold">"{education.institution}"</span>,</div>
+                    <div className="edu-field" style={{ '--i': 2 }}><span className="edu-key">"degree"</span>: <span className="text-gold">"{education.degree}"</span>,</div>
+                    <div className="edu-field" style={{ '--i': 3 }}><span className="edu-key">"focus"</span>: <span className="text-gold">"{education.focus}"</span>,</div>
+                    <div className="edu-field" style={{ '--i': 4 }}><span className="edu-key">"graduation"</span>: <span className="text-gold">"{education.graduation}"</span>,</div>
+                    <div className="edu-field" style={{ '--i': 5 }}><span className="edu-key">"honors"</span>: <span className="text-gold">"{education.honors}"</span>,</div>
+                    <div className="edu-field" style={{ '--i': 6 }}><span className="edu-key">"coursework"</span>: [</div>
+                    {education.coursework.map((c, i) => <React.Fragment key={i}>
+                      <div className="edu-array-item" style={{ '--i': 7 + i }}><span className="text-gold">"{c}"</span>,</div>
                     </React.Fragment>)}
+                    <div className="edu-field" style={{ '--i': 7 + education.coursework.length }}>]</div>
+                    <div style={{ '--i': 8 + education.coursework.length }}><span className="edu-punct">{'}'}</span></div>
+                  </div>
+                  <div className="edu-gpa-col pin-step" data-pin={pEdu.at(1)} inert={pEdu.inert(1)}>
+                    <div className="edu-gpa-label">GPA</div>
+                    <div className="edu-gpa-row">
+                      <div className="edu-gpa-value">{education.gpa}</div>
+                    </div>
+                    <div className="progress-track">
+                      <div className="progress-fill" style={{ width: `${education.gpaPct}%` }}></div>
+                    </div>
                   </div>
                 </div>
-              </React.Fragment>)}
-            </div>
-          </section>
-
-          {/* EDUCATION */}
-          <section id="education" className="section">
-            <div className="section-kicker">SYS.03 // EDUCATION</div>
-            <h2 className="section-title">Education</h2>
-            <div className="edu-grid">
-              <div className="edu-json">
-                <div><span className="edu-punct">{'{'}</span></div>
-                <div className="edu-field"><span className="edu-key">"institution"</span>: <span className="text-gold">"{education.institution}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"degree"</span>: <span className="text-gold">"{education.degree}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"focus"</span>: <span className="text-gold">"{education.focus}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"graduation"</span>: <span className="text-gold">"{education.graduation}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"honors"</span>: <span className="text-gold">"{education.honors}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"coursework"</span>: [</div>
-                {education.coursework.map((c, i) => <React.Fragment key={i}>
-                  <div className="edu-array-item"><span className="text-gold">"{c}"</span>,</div>
-                </React.Fragment>)}
-                <div className="edu-field">]</div>
-                <div><span className="edu-punct">{'}'}</span></div>
-              </div>
-              <div className="edu-gpa-col">
-                <div className="edu-gpa-label">GPA</div>
-                <div className="edu-gpa-row">
-                  <div className="edu-gpa-value">{education.gpa}</div>
-                </div>
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${education.gpaPct}%` }}></div>
-                </div>
               </div>
             </div>
           </section>
 
-          {/* PROJECTS */}
-          <section id="projects" className="section section--wide">
-            <div className="section-kicker">SYS.04 // PROJECTS</div>
-            <h2 className="section-title">Project Work</h2>
-            <div className="project-grid">
+          {/* PROJECTS — swap: one card at a time, each large enough to read.
+              This is the section that fits worst as a grid (over three viewports)
+              and the one that gains most from getting a whole stage per card.
+              Step index is the project's position in the full 5-item array, which
+              featuredProjects (0,1) and gridProjects (2,3,4) partition in order. */}
+          <section id="projects" className="section section--wide pin-track" style={pProj.trackStyle}>
+            <div className="pin-stage" style={pProj.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.04 // PROJECTS</div>
+                <h2 className="section-title">Project Work</h2>
+                <div className="project-grid">
 
               {featuredProjects.map((proj, i) => <React.Fragment key={i}>
-                <div className="proj-card" role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} style={proj.heroStyle}>
-                  <div style={proj.heroImgWrapStyle}>
+                <div className="proj-card pin-step" data-pin={pProj.at(i)} inert={pProj.inert(i)} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} style={proj.heroStyle}>
+                  <div className="proj-pin-imgwrap" style={proj.heroImgWrapStyle}>
                     <img src={proj.image} alt={proj.imageAlt} className="proj-hero-img" />
                   </div>
                   <div className="proj-hero-body">
@@ -1072,14 +1143,21 @@ export default class Portfolio extends React.Component {
               </React.Fragment>)}
 
               {gridProjects.map((proj, i) => <React.Fragment key={i}>
-                <div className="proj-card panel proj-grid-card" role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey}>
+                <div className="proj-card panel proj-grid-card pin-step" data-pin={pProj.at(featuredProjects.length + i)} inert={pProj.inert(featuredProjects.length + i)} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey}>
                   <div className="proj-card-titlebar">
                     <div className="proj-dot-sm" style={{ background: proj.dotColor }}></div>
                     <div className="proj-card-title">{proj.name}</div>
                   </div>
                   {proj.hasImage ? <>
                     <img src={proj.image} alt={proj.imageAlt} className="proj-card-img" />
-                  </> : null}
+                  </> : <>
+                    {/* One project has no screenshot. On the grid that's fine —
+                        the card is short. On a full stage it would read as a
+                        missing asset, so a stand-in holds the slot. Pin-only. */}
+                    <div className="proj-card-img proj-pin-noimage-fill" aria-hidden="true" style={{ color: proj.dotColor }}>
+                      <span className="proj-pin-noimage-glyph">{'</>'}</span>
+                    </div>
+                  </>}
                   <div className="proj-card-body">
                     <div className="proj-card-desc">{proj.desc}</div>
                     <div className="tag-row">
@@ -1092,27 +1170,47 @@ export default class Portfolio extends React.Component {
                 </div>
               </React.Fragment>)}
 
+                </div>
+
+                {/* Position indicator, pin-only. Five dots in each project's own
+                    colour plus a counter, so it's obvious how many are left. */}
+                <div className="proj-pin-progress" aria-hidden="true">
+                  <div className="proj-pin-dots">
+                    {projects.map((proj, i) => <React.Fragment key={i}>
+                      <span className={pProj.at(i) === 'active' ? 'proj-pin-dot is-active' : 'proj-pin-dot'} style={{ background: proj.dotColor }}></span>
+                    </React.Fragment>)}
+                  </div>
+                  <div className="proj-pin-counter">{projCounter} / {String(pProj.steps).padStart(2, '0')}</div>
+                </div>
+
+              </div>
             </div>
           </section>
 
 
-          {/* SKILLS */}
-          <section id="skills" className="section">
-            <div className="section-kicker">SYS.05 // SKILLS</div>
-            <h2 className="section-title section-title--tight">Skills</h2>
-            <div className="skills-blurb">{skillsBlurb}</div>
+          {/* SKILLS — accumulate: three groups in turn, chips staggering within
+              each. Stagger inside one list is legitimate; it's the same entrance
+              on every section that reads as generated. */}
+          <section id="skills" className="section pin-track" style={pSkills.trackStyle}>
+            <div className="pin-stage" style={pSkills.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.05 // SKILLS</div>
+                <h2 className="section-title section-title--tight">Skills</h2>
+                <div className="skills-blurb">{skillsBlurb}</div>
 
-            <div className="skills-groups">
-              {skills.map((g, i) => <React.Fragment key={i}>
-                <div>
-                  <div className="skills-group-title">{g.title}</div>
-                  <div className="tag-row">
-                    {g.items.map((s, j) => <React.Fragment key={j}>
-                      <span className="skill-chip">{s}</span>
-                    </React.Fragment>)}
-                  </div>
+                <div className="skills-groups">
+                  {skills.map((g, i) => <React.Fragment key={i}>
+                    <div className="pin-step skills-step" data-pin={pSkills.at(i)} inert={pSkills.inert(i)}>
+                      <div className="skills-group-title">{g.title}</div>
+                      <div className="tag-row">
+                        {g.items.map((s, j) => <React.Fragment key={j}>
+                          <span className="skill-chip" style={{ '--i': j }}>{s}</span>
+                        </React.Fragment>)}
+                      </div>
+                    </div>
+                  </React.Fragment>)}
                 </div>
-              </React.Fragment>)}
+              </div>
             </div>
           </section>
 

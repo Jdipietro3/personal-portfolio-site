@@ -247,6 +247,204 @@ a:hover { color: #ffb37a; }
 .modal-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 26px; }
 .modal-cta { display: inline-block; margin-top: 26px; background: #f8d488; color: #08080a; font-weight: 700; font-size: 13px; padding: 11px 20px; border-radius: 999px; }
 
+/* --- pinned choreography, per section ---
+   Art direction per fold, not one reveal reused five times. Everything below is
+   gated behind .js-pin and sits inside a no-preference block, so with pinning off
+   none of it applies and each section is the plain document it was.
+
+   The one recurring shape: the *finished* state is the plain rule, and only the
+   [data-pin] states depart from it. That is what makes the fallback free — an
+   element whose base rule is opacity:0 is an element that ships blank the day a
+   transition doesn't fire. */
+@media (prefers-reduced-motion: no-preference) {
+
+/* ABOUT — the console opens, then it logs a line. ---------------------------- */
+/* Titlebar lands first, body unmasks beneath it: a window drawing itself. */
+.js-pin .about-step-titlebar {
+  opacity: 0; transform: scale(0.98);
+  transition: opacity 240ms var(--ease-out-quart), transform 240ms var(--ease-out-quart);
+}
+.js-pin .about-step-titlebar[data-pin="active"],
+.js-pin .about-step-titlebar[data-pin="past"] { opacity: 1; transform: scale(1); }
+
+.js-pin .about-step-body {
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path 420ms var(--ease-out-expo) 100ms;
+}
+.js-pin .about-step-body[data-pin="active"],
+.js-pin .about-step-body[data-pin="past"] { clip-path: inset(0 0 0% 0); }
+
+.js-pin .about-step-body .text-cream,
+.js-pin .about-step-body .about-para {
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 300ms var(--ease-out-quart), transform 300ms var(--ease-out-quart);
+}
+.js-pin .about-step-body[data-pin="active"] .text-cream,
+.js-pin .about-step-body[data-pin="past"] .text-cream { opacity: 1; transform: none; transition-delay: 60ms; }
+.js-pin .about-step-body[data-pin="active"] .about-para,
+.js-pin .about-step-body[data-pin="past"] .about-para { opacity: 1; transform: none; }
+.js-pin .about-step-body[data-pin="active"] .about-para:nth-of-type(1),
+.js-pin .about-step-body[data-pin="past"] .about-para:nth-of-type(1) { transition-delay: 140ms; }
+.js-pin .about-step-body[data-pin="active"] .about-para:nth-of-type(2),
+.js-pin .about-step-body[data-pin="past"] .about-para:nth-of-type(2) { transition-delay: 220ms; }
+
+/* The status types out, quantised to whole characters and driven by
+   --step-progress, so it is scrubbed by the scroll rather than played on a
+   timer. about.status is 85 characters — see content.js. */
+.js-pin .about-status-wrap { --about-status-len: 85; position: relative; display: inline-block; }
+.js-pin .about-status-type { display: inline-block; white-space: pre; }
+/* translate, not `left`: this is recomputed on every scroll frame and `left`
+   would put an abs-positioned layout write in that path. */
+.js-pin .about-status-cursor { position: absolute; top: 0; left: 0; transform: translateX(calc(var(--about-status-len) * 1ch)); }
+.js-pin .about-step-status[data-pin="active"] .about-status-wrap {
+  --about-status-chars: round(down, calc(var(--step-progress, 1) * var(--about-status-len)), 1);
+}
+.js-pin .about-step-status[data-pin="active"] .about-status-type {
+  clip-path: inset(0 calc((var(--about-status-len) - var(--about-status-chars, var(--about-status-len))) * 1ch) 0 0);
+}
+.js-pin .about-step-status[data-pin="active"] .about-status-cursor {
+  transform: translateX(calc(var(--about-status-chars, var(--about-status-len)) * 1ch));
+}
+
+/* EXPERIENCE — swap, with the rail as the position indicator. ---------------- */
+.js-pin .exp-timeline {
+  display: flex; flex-direction: row; align-items: stretch; gap: 36px;
+  border-left: none; padding-left: 0; height: 320px;
+}
+.js-pin .exp-rail {
+  display: flex; flex-direction: column; justify-content: space-between;
+  align-items: center; position: relative; width: 9px; flex: none; padding: 6px 0;
+}
+.js-pin .exp-rail::before {
+  content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+  background: rgba(255,255,255,0.12); transform: translateX(-50%);
+}
+.js-pin .exp-rail-dot {
+  position: relative; z-index: 1; width: 9px; height: 9px; border-radius: 50%;
+  background: rgba(255,255,255,0.16); box-shadow: 0 0 0 4px #08080a;
+  transition: background-color 320ms var(--ease-out-quart),
+              box-shadow 320ms var(--ease-out-quart),
+              transform 320ms var(--ease-out-quart);
+}
+.js-pin .exp-rail-dot[data-pin="past"] { background: var(--dot-color); opacity: 0.4; }
+.js-pin .exp-rail-dot[data-pin="active"] {
+  background: var(--dot-color); transform: scale(1.4);
+  box-shadow: 0 0 0 4px #08080a, 0 0 0 5px rgba(248,212,136,0.18), 0 0 14px 1px var(--dot-color);
+}
+/* All three jobs share one box; content is centred so the differing bullet
+   counts don't shift the panel's weight as it swaps. */
+.js-pin .exp-stack { position: relative; flex: 1; min-width: 0; }
+.js-pin .exp-timeline .exp-step {
+  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
+  opacity: 0;
+  /* visibility lags the fade so the box leaves the a11y tree only after it has
+     finished disappearing, rather than blinking out mid-transition. */
+  transition: opacity 380ms var(--ease-out-quart),
+              transform 380ms var(--ease-out-quart),
+              visibility 0s linear 380ms;
+}
+.js-pin .exp-timeline .exp-step .timeline-dot { display: none; }
+.js-pin .exp-timeline .exp-step[data-pin="active"] {
+  opacity: 1; transform: translateY(0); visibility: visible; transition-delay: 0s;
+}
+/* Chronology as direction: the array is newest-first, so a job exits upward
+   into the past and the next arrives from below, along the rail's own axis. */
+.js-pin .exp-timeline .exp-step[data-pin="past"] { opacity: 0; transform: translateY(-16px); visibility: hidden; }
+.js-pin .exp-timeline .exp-step[data-pin="future"] { opacity: 0; transform: translateY(16px); }
+
+/* EDUCATION — the record prints, then the GPA fills. ------------------------- */
+/* 21 lines at the unpinned line-height would overrun a 720px stage once the
+   kicker and title are counted. Tightened only while pinned; the plain document
+   keeps its airier setting. */
+.js-pin .edu-json { padding: 26px 28px; font-size: 12.5px; line-height: 1.65; }
+.js-pin .edu-gpa-col { padding: 26px 28px; }
+
+.js-pin .edu-json > div { opacity: 1; transform: none; }
+/* Horizontal, never vertical: a translateY per line would make the whole block
+   jitter as each one lands. */
+.js-pin .edu-json[data-pin="future"] > div { opacity: 0; transform: translateX(-8px); }
+.js-pin .edu-json[data-pin="active"] > div {
+  transition: opacity 320ms var(--ease-out-quart), transform 320ms var(--ease-out-quart);
+  transition-delay: calc(var(--i, 0) * 23ms);
+}
+.js-pin .edu-json[data-pin="past"] > div { opacity: 1; transform: none; transition: none; }
+
+/* clip-path, not width or scaleX: the fill carries a 90deg gradient that scaling
+   would stretch, and width would animate layout. The inline width stays — it is
+   the bar's extent; this reveals that extent. */
+.js-pin .progress-fill { clip-path: inset(0 0 0 0); }
+.js-pin .edu-gpa-col[data-pin="future"] .progress-fill { clip-path: inset(0 100% 0 0); }
+.js-pin .edu-gpa-col[data-pin="future"] .edu-gpa-label,
+.js-pin .edu-gpa-col[data-pin="future"] .edu-gpa-value { opacity: 0; }
+.js-pin .edu-gpa-col[data-pin="active"] .progress-fill { transition: clip-path 420ms var(--ease-out-expo); }
+.js-pin .edu-gpa-col[data-pin="active"] .edu-gpa-label,
+.js-pin .edu-gpa-col[data-pin="active"] .edu-gpa-value { opacity: 1; transition: opacity 260ms var(--ease-out-quart); }
+
+/* PROJECTS — swap, one card per stage. --------------------------------------- */
+/* All five cards collapse into one cell. visibility:hidden rather than
+   display:none so the row still sizes to the tallest and the stage doesn't
+   change height between swaps. */
+.js-pin #projects .project-grid { display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 0; }
+.js-pin #projects .project-grid > .proj-card { grid-column: 1; grid-row: 1; }
+.js-pin #projects .pin-step[data-pin="past"] { visibility: hidden; }
+/* A bare 16:9 at full pinned width would overrun the budget once the titlebar
+   and body are stacked under it. */
+.js-pin #projects .proj-card-img { aspect-ratio: auto; height: 300px; }
+.js-pin .proj-pin-noimage-fill {
+  display: flex; align-items: center; justify-content: center;
+  background: #08080a; border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px dashed currentColor; opacity: 0.9;
+}
+.proj-pin-noimage-glyph { font-size: 34px; font-weight: 700; letter-spacing: 0.02em; opacity: 0.55; }
+/* The card loads in rather than sliding past: it scales up while its image
+   unmasks left to right, both scrubbed off --step-progress. The reveal finishes
+   a quarter into the step so the rest of the dwell is still and readable. */
+.js-pin #projects .pin-step[data-pin="active"] {
+  --proj-reveal: clamp(0, calc(var(--step-progress, 1) * 4), 1);
+  opacity: var(--proj-reveal);
+  transform: scale(calc(0.97 + var(--proj-reveal) * 0.03));
+}
+.js-pin #projects .pin-step[data-pin="active"] .proj-pin-imgwrap,
+.js-pin #projects .pin-step[data-pin="active"] .proj-card-img {
+  clip-path: inset(0 calc((1 - var(--proj-reveal)) * 100%) 0 0);
+}
+.js-pin .proj-pin-progress { display: flex; align-items: center; gap: 14px; margin-top: 24px; }
+.js-pin .proj-pin-dots { display: flex; gap: 8px; }
+.js-pin .proj-pin-dot { width: 6px; height: 6px; border-radius: 50%; opacity: 0.28; transition: opacity 240ms var(--ease-out-quart); }
+.js-pin .proj-pin-dot.is-active { opacity: 1; }
+.js-pin .proj-pin-counter { font-size: 11px; letter-spacing: 0.1em; color: rgba(242,241,236,0.4); }
+
+/* SKILLS — groups accumulate, chips stagger within each. --------------------- */
+.js-pin .skills-step .skills-group-title {
+  opacity: 0; transform: translateY(-6px);
+  transition: opacity 300ms var(--ease-out-quart), transform 300ms var(--ease-out-quart);
+}
+.js-pin .skills-step[data-pin="active"] .skills-group-title,
+.js-pin .skills-step[data-pin="past"] .skills-group-title { opacity: 1; transform: translateY(0); }
+/* Chips arrive with the border already lit gold and settle to the resting
+   colour — they're discrete tokens registering, not a list fading up. 40ms
+   apart, so the nine-item group spans 320ms. */
+.js-pin .skills-step .skill-chip {
+  opacity: 0; transform: scale(0.9); border-color: rgba(248,212,136,0.85);
+  transition: opacity 240ms var(--ease-out-quart),
+              transform 240ms var(--ease-out-quart),
+              border-color 380ms var(--ease-out-quart);
+  transition-delay: calc(var(--i, 0) * 40ms);
+}
+.js-pin .skills-step[data-pin="active"] .skill-chip,
+.js-pin .skills-step[data-pin="past"] .skill-chip {
+  opacity: 1; transform: scale(1); border-color: rgba(255,255,255,0.12);
+}
+
+}
+
+/* Pin-only furniture: elements that exist purely to serve the pinned layout and
+   must render as nothing in the plain document. Deliberately outside the
+   no-preference block — these have to stay hidden under reduce-motion too. */
+.exp-rail { display: none; }
+.proj-pin-progress { display: none; }
+.proj-pin-noimage-fill { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
