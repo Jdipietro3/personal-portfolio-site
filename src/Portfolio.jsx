@@ -477,9 +477,11 @@ export default class Portfolio extends React.Component {
       onClick: (e) => { e.preventDefault(); this.scrollToSection(s.id); }
     }));
 
-    // Content comes from content.js. Each list is copied before decoration — the source
-    // arrays are shared with the search index and must never pick up per-render fields.
-    const experience = CONTENT.experience.map((job) => Object.assign({}, job, { domId: 'job-' + job.id }));
+    // Content comes from content.js. Lists that need per-render fields are copied first —
+    // the source arrays are shared with the search index and must never pick them up.
+    // Experience needs none: its dom id is built inline in the JSX, so it renders
+    // straight off the source array with no copy at all.
+    const experience = CONTENT.experience;
 
     const stackHero = this.state.winW < 760;
     const projects = CONTENT.projects.map((p) => {
@@ -524,7 +526,7 @@ export default class Portfolio extends React.Component {
 
     const education = CONTENT.education;
     const about = CONTENT.about;
-    const contact = Object.assign({}, CONTENT.contact, { mailto: 'mailto:' + CONTENT.contact.email });
+    const contact = CONTENT.contact;
 
     // --- search ---
     // Everything below is pure formatting. The {{ }} evaluator has no arithmetic,
@@ -559,7 +561,9 @@ export default class Portfolio extends React.Component {
 
       const results = list.map((r, i) => Object.assign({}, r, {
         domId: 'search-opt-' + i,
-        selected: i === this.state.searchSel ? 'true' : 'false',
+        // A real boolean: React renders aria-* booleans as "true"/"false" itself. The
+        // hand-coercion this replaces existed only because {{ }} could not do it.
+        selected: i === this.state.searchSel,
         scorePct: Math.round(Math.max(0.08, Math.min(1, r.score)) * 100),
         onActivate: () => this.activateResult(r),
         onHover: () => { if (this.state.searchSel !== i) this.setState({ searchSel: i }); }
@@ -787,7 +791,7 @@ export default class Portfolio extends React.Component {
             <h2 className="section-title">Work Experience</h2>
             <div className="timeline">
               {experience.map((job, i) => <React.Fragment key={i}>
-                <div id={job.domId} className="timeline-item">
+                <div id={`job-${job.id}`} className="timeline-item">
                   <div className="timeline-dot" style={{ background: job.dotColor }}></div>
                   <div className="timeline-range">{job.range}</div>
                   <div className="timeline-role">{job.role}</div>
@@ -919,7 +923,7 @@ export default class Portfolio extends React.Component {
             <h2 className="contact-title">{contact.headline}</h2>
             <p className="contact-blurb">{contact.blurb}</p>
             <div className="contact-links">
-              <a href={contact.mailto} className="contact-email-btn">{contact.email}</a>
+              <a href={`mailto:${contact.email}`} className="contact-email-btn">{contact.email}</a>
               {contact.links.map((l, i) => <React.Fragment key={i}>
                 <a href={l.href} className="contact-link-btn">{l.label}</a>
               </React.Fragment>)}
