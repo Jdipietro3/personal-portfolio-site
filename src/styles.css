@@ -274,19 +274,12 @@ a:hover { color: #ffb37a; }
 .js-pin .about-step-body[data-pin="active"],
 .js-pin .about-step-body[data-pin="past"] { clip-path: inset(0 0 0% 0); }
 
-.js-pin .about-step-body .text-cream,
-.js-pin .about-step-body .about-para {
-  opacity: 0; transform: translateY(8px);
-  transition: opacity 300ms var(--ease-out-quart), transform 300ms var(--ease-out-quart);
-}
-.js-pin .about-step-body[data-pin="active"] .text-cream,
-.js-pin .about-step-body[data-pin="past"] .text-cream { opacity: 1; transform: none; transition-delay: 60ms; }
-.js-pin .about-step-body[data-pin="active"] .about-para,
-.js-pin .about-step-body[data-pin="past"] .about-para { opacity: 1; transform: none; }
-.js-pin .about-step-body[data-pin="active"] .about-para:nth-of-type(1),
-.js-pin .about-step-body[data-pin="past"] .about-para:nth-of-type(1) { transition-delay: 140ms; }
-.js-pin .about-step-body[data-pin="active"] .about-para:nth-of-type(2),
-.js-pin .about-step-body[data-pin="past"] .about-para:nth-of-type(2) { transition-delay: 220ms; }
+/* The unmask IS the reveal. An extra per-paragraph fade-and-rise on top of it
+   would be a second reveal doing the same job, and it is the exact move
+   education's lines and skills' chips would then also be making — three
+   sections quietly converging on one staggered opacity+offset is the tell this
+   whole direction exists to avoid. The wipe alone is the stronger read anyway:
+   text appearing as the window draws down over it, not text arriving. */
 
 /* The status types out, quantised to whole characters and driven by
    --step-progress, so it is scrubbed by the scroll rather than played on a
@@ -359,26 +352,33 @@ a:hover { color: #ffb37a; }
 .js-pin .edu-json { padding: 26px 28px; font-size: 12.5px; line-height: 1.65; }
 .js-pin .edu-gpa-col { padding: 26px 28px; }
 
-.js-pin .edu-json > div { opacity: 1; transform: none; }
-/* Horizontal, never vertical: a translateY per line would make the whole block
-   jitter as each one lands. */
-.js-pin .edu-json[data-pin="future"] > div { opacity: 0; transform: translateX(-8px); }
-.js-pin .edu-json[data-pin="active"] > div {
-  transition: opacity 320ms var(--ease-out-quart), transform 320ms var(--ease-out-quart);
-  transition-delay: calc(var(--i, 0) * 23ms);
+/* The transition lives on the base rule, not inside [data-pin="active"]. Scoped
+   to active it would exist only while arriving, so leaving the state would find
+   no transition to run and the lines would snap — an eased entrance with a hard
+   exit, which reads as a bug when you scroll back up.
+   Horizontal, never vertical: a translateY per line would make the whole block
+   jitter as each one lands.
+   21 lines (nine structural plus twelve coursework entries — count them in
+   content.js, not by eye) at 16ms is a 320ms span. At the 23ms it started with
+   the last line began at 460ms and finished past 780, which is not a printer,
+   it's a crawl. */
+.js-pin .edu-json > div {
+  opacity: 1; transform: none;
+  transition: opacity 260ms var(--ease-out-quart), transform 260ms var(--ease-out-quart);
+  transition-delay: calc(var(--i, 0) * 16ms);
 }
-.js-pin .edu-json[data-pin="past"] > div { opacity: 1; transform: none; transition: none; }
+.js-pin .edu-json[data-pin="future"] > div { opacity: 0; transform: translateX(-8px); }
+.js-pin .edu-json[data-pin="past"] > div { transition-delay: 0s; }
 
 /* clip-path, not width or scaleX: the fill carries a 90deg gradient that scaling
    would stretch, and width would animate layout. The inline width stays — it is
    the bar's extent; this reveals that extent. */
-.js-pin .progress-fill { clip-path: inset(0 0 0 0); }
+.js-pin .progress-fill { clip-path: inset(0 0 0 0); transition: clip-path 420ms var(--ease-out-expo); }
+.js-pin .edu-gpa-label,
+.js-pin .edu-gpa-value { opacity: 1; transition: opacity 260ms var(--ease-out-quart); }
 .js-pin .edu-gpa-col[data-pin="future"] .progress-fill { clip-path: inset(0 100% 0 0); }
 .js-pin .edu-gpa-col[data-pin="future"] .edu-gpa-label,
 .js-pin .edu-gpa-col[data-pin="future"] .edu-gpa-value { opacity: 0; }
-.js-pin .edu-gpa-col[data-pin="active"] .progress-fill { transition: clip-path 420ms var(--ease-out-expo); }
-.js-pin .edu-gpa-col[data-pin="active"] .edu-gpa-label,
-.js-pin .edu-gpa-col[data-pin="active"] .edu-gpa-value { opacity: 1; transition: opacity 260ms var(--ease-out-quart); }
 
 /* PROJECTS — swap, one card per stage. --------------------------------------- */
 /* All five cards collapse into one cell. visibility:hidden rather than
@@ -386,7 +386,15 @@ a:hover { color: #ffb37a; }
    change height between swaps. */
 .js-pin #projects .project-grid { display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 0; }
 .js-pin #projects .project-grid > .proj-card { grid-column: 1; grid-row: 1; }
-.js-pin #projects .pin-step[data-pin="past"] { visibility: hidden; }
+/* Cards that have been and gone fade rather than cut. Without this the outgoing
+   card simply disappears the frame the step index changes, which is jarring next
+   to how deliberately the incoming one builds. visibility lags the fade so the
+   box leaves the a11y tree only once it has finished going. */
+.js-pin #projects .pin-step {
+  transition: opacity 260ms var(--ease-out-quart), visibility 0s linear 260ms;
+}
+.js-pin #projects .pin-step[data-pin="past"],
+.js-pin #projects .pin-step[data-pin="future"] { opacity: 0; visibility: hidden; }
 /* A bare 16:9 at full pinned width would overrun the budget once the titlebar
    and body are stacked under it. */
 .js-pin #projects .proj-card-img { aspect-ratio: auto; height: 300px; }
@@ -399,10 +407,16 @@ a:hover { color: #ffb37a; }
 /* The card loads in rather than sliding past: it scales up while its image
    unmasks left to right, both scrubbed off --step-progress. The reveal finishes
    a quarter into the step so the rest of the dwell is still and readable. */
+/* The fallback is 1, not 0. Every scrubbed value on this page falls back to its
+   finished state, because the one moment --step-progress can be missing is a
+   frame where the engine hasn't written it — and an active card that resolves
+   to opacity 0 is a blank stage. */
 .js-pin #projects .pin-step[data-pin="active"] {
   --proj-reveal: clamp(0, calc(var(--step-progress, 1) * 4), 1);
   opacity: var(--proj-reveal);
   transform: scale(calc(0.97 + var(--proj-reveal) * 0.03));
+  visibility: visible;
+  transition-delay: 0s;
 }
 .js-pin #projects .pin-step[data-pin="active"] .proj-pin-imgwrap,
 .js-pin #projects .pin-step[data-pin="active"] .proj-card-img {
@@ -421,19 +435,30 @@ a:hover { color: #ffb37a; }
 }
 .js-pin .skills-step[data-pin="active"] .skills-group-title,
 .js-pin .skills-step[data-pin="past"] .skills-group-title { opacity: 1; transform: translateY(0); }
-/* Chips arrive with the border already lit gold and settle to the resting
-   colour — they're discrete tokens registering, not a list fading up. 40ms
-   apart, so the nine-item group spans 320ms. */
+/* Chips register rather than arrive: each one lights gold — fill and border
+   together — then drains to its resting state, in sequence. Deliberately no
+   transform. A scale or a rise here would make this the third section in a row
+   whose motion is "opacity plus a small offset, staggered by index", which is
+   the generated-looking reflex; a token flashing as it's read is specific to
+   what a skill chip actually is. 32ms apart, so the nine-item group spans
+   256ms and settles inside 500. */
 .js-pin .skills-step .skill-chip {
-  opacity: 0; transform: scale(0.9); border-color: rgba(248,212,136,0.85);
-  transition: opacity 240ms var(--ease-out-quart),
-              transform 240ms var(--ease-out-quart),
-              border-color 380ms var(--ease-out-quart);
-  transition-delay: calc(var(--i, 0) * 40ms);
+  opacity: 0;
+  border-color: rgba(248,212,136,0.9);
+  background: rgba(248,212,136,0.16);
+  color: #fff3d0;
+  transition: opacity 200ms var(--ease-out-quart),
+              border-color 240ms var(--ease-out-quart),
+              background 240ms var(--ease-out-quart),
+              color 240ms var(--ease-out-quart);
+  transition-delay: calc(var(--i, 0) * 32ms);
 }
 .js-pin .skills-step[data-pin="active"] .skill-chip,
 .js-pin .skills-step[data-pin="past"] .skill-chip {
-  opacity: 1; transform: scale(1); border-color: rgba(255,255,255,0.12);
+  opacity: 1;
+  border-color: rgba(255,255,255,0.12);
+  background: transparent;
+  color: rgba(242,241,236,0.75);
 }
 
 }

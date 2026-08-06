@@ -274,9 +274,17 @@ export default class Portfolio extends React.Component {
     const tops = {};
     for (const id of PIN_IDS) {
       const el = document.getElementById(id);
-      // All-or-nothing: a partial measurement would pin some sections against
-      // stale numbers, which looks far worse than not pinning at all.
-      if (!el) { this._pinTops = null; this._safeSetState({ pins: null }); return; }
+      // All-or-nothing, and it turns pinning off rather than just clearing the
+      // progress. Clearing alone would leave the tracks tall and the stages
+      // sticky while every step reported 'active' — which in the two swapping
+      // sections means all three jobs, or all five project cards, rendered on
+      // top of each other. Unpinning is the same exit the too-narrow and
+      // reduce-motion paths take, and it lands on the plain document.
+      if (!el) {
+        this._pinTops = null;
+        this._safeSetState({ pinned: false, pins: null });
+        return;
+      }
       tops[id] = el.getBoundingClientRect().top + window.scrollY;
     }
     this._pinTops = tops;
