@@ -105,7 +105,12 @@ a:hover { color: #ffb37a; }
    travels underneath. z-index needs position, hence relative. */
 .nav-pill-item { position: relative; z-index: 1; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; letter-spacing: 0.03em; transition: color 260ms var(--ease-out-quart); }
 /* width starts at 0 so the marker is invisible until syncNavIndicator() has
-   measured — a pill-shaped flash at the wrong size is worse than none. */
+   measured — a pill-shaped flash at the wrong size is worse than none.
+   Transitioning `width` is deliberate, not an oversight. It is normally a layout
+   property worth avoiding, but this element is absolutely positioned with no
+   children and no siblings, so nothing else on the page pays for the reflow. The
+   transform-only alternative was considered and rejected: scaleX would squash
+   the border-radius: 999px end caps out of round as the marker resized. */
 .nav-indicator { position: absolute; left: 0; top: 0; width: 0; height: 0; border-radius: 999px; background: #f8d488; pointer-events: none; transition: transform 340ms var(--ease-out-expo), width 340ms var(--ease-out-expo); }
 .nav-search-trigger { display: flex; align-items: center; gap: 6px; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 6px 11px; margin-left: 4px; color: rgba(242,241,236,0.65); font-size: 12.5px; line-height: 1; }
 .btn-nav-resume { margin-left: 6px; background: #f8d488; color: #08080a; font-weight: 700; font-size: 12px; padding: 8px 16px; border-radius: 999px; }
@@ -357,10 +362,14 @@ a:hover { color: #ffb37a; }
    Three beats, all sequenced off the single future→active flip.
 
    `animation`, not `transition`, from here down. An animation restarts whenever
-   its selector re-matches, so scrolling back up and down replays the reveal; a
-   transition to an already-settled value would never fire a second time. `both`
-   holds the from-state before the delay elapses and the to-state after, so the
-   staggered elements don't flash at full opacity while waiting their turn. */
+   its selector re-matches. In practice that means the reveal replays only when
+   you scroll up out of the section — back above the track's entry line, which
+   drops data-pin to "future" — and then come back down. Scrolling up *into* the
+   section from below never un-enters it, so it stays settled rather than
+   re-firing under you. A transition to an already-settled value would never fire
+   a second time. `both` holds the from-state before the delay elapses and the
+   to-state after, so the staggered elements don't flash at full opacity while
+   waiting their turn. */
 @keyframes eduRowIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 @keyframes eduTitleIn { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes eduChipIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }

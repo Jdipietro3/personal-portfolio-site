@@ -46,11 +46,13 @@ const REVEAL_VH = 60;
 // chrome, and a long pinned sequence is worse on a phone than a plain scroll.
 const PIN_MIN_WIDTH = 900;
 
-// A stage is one viewport tall and has to hold its section's tallest step. The
-// two tightest are education and projects, which measure ~643px on a 900px-wide
-// window; below ~680px of viewport they would overflow the stage and the excess
-// would be unreachable, since the track scroll advances steps rather than
-// panning the stage. A short window falls back to plain flow instead.
+// A stage is one viewport tall and has to hold its section's tallest step.
+// Projects is the tallest — its kicker, title, rail and step dots run to
+// roughly 573px — and education, with its five-row readout plus coursework
+// grid, isn't far behind at roughly 435px. 680 leaves projects headroom on top
+// of its own height; below that a short window would overflow the stage and the
+// excess would be unreachable, since the track scroll advances steps rather
+// than panning the stage. A short window falls back to plain flow instead.
 const PIN_MIN_HEIGHT = 680;
 
 // What each pinned section does, and how much scroll it gets for it.
@@ -123,6 +125,11 @@ export default class Portfolio extends React.Component {
     // load. Null means "not measured, don't pin" — every consumer treats that as
     // plain flow, so a failed measurement degrades to today's site.
     this._pinTops = null;
+    // remeasurePins() retries once on the next frame before giving up — see
+    // there. _pinRetried caps it at that one retry, and _pinRetryRaf is the
+    // handle componentWillUnmount cancels.
+    this._pinRetried = false;
+    this._pinRetryRaf = null;
     // { centres: number[], viewW } for the projects rail — see measureRail().
     this._rail = null;
   }
@@ -214,6 +221,7 @@ export default class Portfolio extends React.Component {
     }
     document.body.style.overflow = this._prevOverflow || '';
     if (this._raf) cancelAnimationFrame(this._raf);
+    if (this._pinRetryRaf) cancelAnimationFrame(this._pinRetryRaf);
     clearTimeout(this._searchDebounce);
     clearTimeout(this._flashTimer);
     this.cancelAfterScroll();
@@ -340,6 +348,7 @@ export default class Portfolio extends React.Component {
   remeasurePins() {
     if (!this.state.pinned) {
       this._pinTops = null;
+      this._pinRetried = false;
       if (this.state.pins) this._safeSetState({ pins: null });
       return;
     }
@@ -352,7 +361,13 @@ export default class Portfolio extends React.Component {
       // sections means all three jobs, or all five project cards, rendered on
       // top of each other. Unpinning is the same exit the too-narrow and
       // reduce-motion paths take, and it lands on the plain document.
+      //
+      // A miss on the first pass is usually layout not having settled yet, not a
+      // real failure, so one retry is queued for the next frame before giving
+      // up. _pinRetried caps it at one: if the retry hits the same wall, this
+      // unpins permanently exactly as it did before.
       if (!el) {
+        if (this.retryPins()) return;
         this._pinTops = null;
         this._safeSetState({ pinned: false, pins: null });
         return;
@@ -360,15 +375,31 @@ export default class Portfolio extends React.Component {
       tops[id] = el.getBoundingClientRect().top + window.scrollY;
     }
     this._pinTops = tops;
-    // The rail is measured under the same all-or-nothing rule. A rail that can't
-    // be measured would sit at offset zero with its first card jammed against the
-    // left edge and no way to reach the rest — worse than not pinning.
+    // The rail is measured under the same all-or-nothing rule, and gets the same
+    // one-frame retry. A rail that can't be measured would sit at offset zero
+    // with its first card jammed against the left edge and no way to reach the
+    // rest — worse than not pinning.
     if (!this.measureRail()) {
+      if (this.retryPins()) return;
       this._pinTops = null;
       this._safeSetState({ pinned: false, pins: null });
       return;
     }
+    this._pinRetried = false;
     this._safeSetState({ pins: this.computePins() });
+  }
+
+  // Queues remeasurePins() for the next frame, once. Returns whether it queued —
+  // false means the retry has already been spent and the caller should take its
+  // permanent failure path.
+  retryPins() {
+    if (this._pinRetried) return false;
+    this._pinRetried = true;
+    this._pinRetryRaf = requestAnimationFrame(() => {
+      this._pinRetryRaf = null;
+      if (this._alive) this.remeasurePins();
+    });
+    return true;
   }
 
   // Per-track progress and step index. `p` is 0..1 across the whole track, `step`
@@ -856,9 +887,14 @@ export default class Portfolio extends React.Component {
     const railData = pinned && pinData ? pinData.projects : null;
     const railStyle = railData && railData.railX != null
       ? { '--rail-x': railData.railX.toFixed(1) + 'px' } : null;
-    // Which card is nearest centre, for emphasis. -1 before the track is entered.
-    const railFocus = railData && railData.step >= 0
+    // Which card is nearest centre. Two values, because two consumers want
+    // different answers before the track has been entered: the rail already sits
+    // with card 0 dead centre by then, so *emphasis* clamps to 0 rather than
+    // dimming a card that is plainly the one you're looking at — while the
+    // counter keeps the -1 so its 00 stays honest about not having arrived.
+    const railCounter = railData && railData.step >= 0
       ? Math.round(railData.p * (PIN_SPEC.projects.steps - 1)) : -1;
+    const railFocus = Math.max(0, railCounter);
 
     const ids = SECTION_IDS;
     const navItems = CONTENT.sections.map((s) => ({
@@ -904,7 +940,7 @@ export default class Portfolio extends React.Component {
 
     // Reads 01..NN once a card is centred and 00 before the track is entered,
     // which is the honest answer rather than pretending the first one is up.
-    const projCounter = String(railFocus + 1).padStart(2, '0');
+    const projCounter = String(railCounter + 1).padStart(2, '0');
 
     const openProj = this.state.openProject != null ? projects.find((p) => p.key === this.state.openProject) : null;
     const modal = openProj ? {
@@ -1317,7 +1353,7 @@ export default class Portfolio extends React.Component {
               {projects.map((proj, i) => <React.Fragment key={proj.key}>
                 {proj.featured ? (
                 <div className="proj-card proj-card--featured" data-rail={railFocus === i ? 'focus' : 'off'} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} onFocus={() => this.scrollRailTo(i)} style={proj.heroStyle}>
-                  <div className="proj-pin-imgwrap" style={proj.heroImgWrapStyle}>
+                  <div style={proj.heroImgWrapStyle}>
                     {proj.hasImage ? (
                       <img src={proj.image} alt={proj.imageAlt} className="proj-hero-img" />
                     ) : (
