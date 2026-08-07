@@ -110,7 +110,9 @@ export default class Portfolio extends React.Component {
     this._navIndicatorRef = React.createRef();
     this._searchTriggerEl = null;
     this._flashTimer = null;
-    this._pendingScroll = null;
+    // afterScroll()'s one-shot: the listener it armed, and the timer that backs it.
+    this._scrollEndRun = null;
+    this._scrollEndTimer = null;
     this._isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform || '');
     this._time = 0;
     this._geom = null;
@@ -127,8 +129,11 @@ export default class Portfolio extends React.Component {
 
   componentDidMount() {
     this.onScroll = () => {
-      this.setState({ scrollY: window.scrollY, flow: this.computeFlow(), pins: this.computePins() });
-      this.updateActive();
+      // Both consumers want the same six numbers; measuring them once keeps the
+      // handler's layout reads to what they were before anchors existed.
+      const anchors = this.sectionAnchors();
+      this.setState({ scrollY: window.scrollY, flow: this.computeFlow(anchors), pins: this.computePins() });
+      this.updateActive(anchors);
     };
     this.onResize = () => {
       // pinAllowed() reads window.innerWidth/innerHeight directly, not state, so
@@ -211,6 +216,7 @@ export default class Portfolio extends React.Component {
     if (this._raf) cancelAnimationFrame(this._raf);
     clearTimeout(this._searchDebounce);
     clearTimeout(this._flashTimer);
+    this.cancelAfterScroll();
   }
 
   // The model load and query embedding are async and can outlive the component.
@@ -400,12 +406,44 @@ export default class Portfolio extends React.Component {
     return out;
   }
 
-  computeFlow() {
-    const ids = SECTION_IDS;
-    const anchors = ids.map((id) => {
-      const el = document.getElementById(id);
-      return el ? el.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.4 : null;
-    });
+  // ---- where a section lives ----------------------------------------------
+  // One answer to "what scrollY puts this section, at this step, on stage",
+  // shared by nav clicks, the scroll-spy, the neural strip and search jumps.
+  // Those four used to each compute their own, which is exactly why they
+  // disagreed: a pinned section is a multi-viewport track whose stage locks at
+  // its top, not a box you're 40% of a viewport away from.
+  sectionAnchor(id, step = 0) {
+    if (typeof window === 'undefined') return null;
+    const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    // Pinned: the track top is the frame the stage locks, and each further step
+    // sits at its own fraction of the travel. A one-step section has no
+    // interior, so every step resolves to the top.
+    if (this.state.pinned && this._pinTops && PIN_SPEC[id]) {
+      const steps = PIN_SPEC[id].steps;
+      const span = Math.max(1, this.pinTrackHeight(id) - window.innerHeight);
+      const t = steps > 1 ? Math.max(0, Math.min(1, step / (steps - 1))) : 0;
+      return Math.min(max, Math.round(this._pinTops[id] + span * t));
+    }
+    // Unpinned — contact, everything below the breakpoint, and everything under
+    // reduce-motion. Centre the element in the viewport. The clamp matters: a
+    // final section between one and two viewports tall has a centre position
+    // past the end of the scroll range, and an anchor nobody can scroll to is a
+    // section the spy can never mark active.
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const y = r.top + window.scrollY + r.height / 2 - window.innerHeight / 2;
+    return Math.max(0, Math.min(max, Math.round(y)));
+  }
+
+  // The six section anchors in order, measured once per scroll and handed to
+  // both consumers rather than each recomputing them.
+  sectionAnchors() {
+    return SECTION_IDS.map((id) => this.sectionAnchor(id));
+  }
+
+  computeFlow(anchors) {
+    if (!anchors) anchors = this.sectionAnchors();
     if (anchors.some((a) => a === null)) return this.state.flow || 0;
     const y = window.scrollY;
     if (y <= anchors[0]) return 0;
@@ -418,23 +456,18 @@ export default class Portfolio extends React.Component {
     return anchors.length - 1;
   }
 
-  updateActive() {
-    const ids = SECTION_IDS;
-    // A short final section never gets its top above the 40% line, so the loop below
-    // can't ever pick it: at max scroll contact.top is (innerHeight - its height), which
-    // only clears 0.4*innerHeight on windows under ~820px tall. Being at the end of the
-    // page means you're in the last section, wherever its top sits. The tolerance is so
-    // this engages over the final stretch of scroll rather than snapping in the last pixel.
-    const doc = document.documentElement;
-    if (window.innerHeight + window.scrollY >= doc.scrollHeight - 130) {
-      const last = ids[ids.length - 1];
-      if (last !== this.state.active) this.setState({ active: last });
-      return;
-    }
+  // The last section whose anchor we've reached. The end-of-page special case
+  // this used to need is gone with it: it existed only because a short final
+  // section could never get its top above the 40% line, and an anchor is
+  // reachable by construction — sectionAnchor() clamps it into the scroll range.
+  updateActive(anchors) {
+    if (!anchors) anchors = this.sectionAnchors();
+    const y = window.scrollY;
     let current = this.state.active;
-    for (const id of ids) {
-      const el = document.getElementById(id);
-      if (el && el.getBoundingClientRect().top < window.innerHeight * 0.4) current = id;
+    for (let i = 0; i < SECTION_IDS.length; i++) {
+      // A few px of slack so the final section, whose anchor can sit exactly at
+      // max scroll, still registers rather than depending on the last pixel.
+      if (anchors[i] != null && y + 8 >= anchors[i]) current = SECTION_IDS[i];
     }
     if (current !== this.state.active) this.setState({ active: current });
   }
@@ -455,22 +488,36 @@ export default class Portfolio extends React.Component {
     this.setState({ openProject: null });
     // send focus back to whatever card opened the dialog
     if (this._prevFocus && this._prevFocus.focus) this._prevFocus.focus();
-    // A search result that opened this dialog deferred its scroll until now, because
-    // scrolling under an open modal is both invisible and cancelled by overflow:hidden.
-    const pending = this._pendingScroll;
-    this._pendingScroll = null;
-    if (pending) {
-      this.scrollToSection(pending);
-      this.flashTarget(pending);
-    }
   }
 
-  scrollToSection(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const y = el.getBoundingClientRect().top + window.scrollY - 90;
+  // Returns the scroll target it aimed at, so a caller that needs to act once the
+  // page has arrived can tell whether it was already there.
+  scrollToSection(id, step = 0) {
+    const y = this.sectionAnchor(id, step);
+    if (y == null) return null;
     const smooth = !(this._reduceMotion && this._reduceMotion.matches);
     window.scrollTo({ top: y, behavior: smooth ? 'smooth' : 'auto' });
+    return y;
+  }
+
+  // Runs fn once the current scroll settles. `scrollend` is the early exit, not
+  // the guarantee: Safari before 18 doesn't have it at all, and an instant jump
+  // may never fire one. The timer is what actually guarantees fn runs, and both
+  // paths go through the same one-shot so a late event can't run it twice.
+  afterScroll(fn) {
+    this.cancelAfterScroll();
+    const run = () => { this.cancelAfterScroll(); fn(); };
+    this._scrollEndRun = run;
+    window.addEventListener('scrollend', run);
+    this._scrollEndTimer = setTimeout(run, 700);
+  }
+
+  cancelAfterScroll() {
+    if (this._scrollEndRun) {
+      window.removeEventListener('scrollend', this._scrollEndRun);
+      this._scrollEndRun = null;
+    }
+    clearTimeout(this._scrollEndTimer);
   }
 
   // ---- search -------------------------------------------------------------
@@ -611,18 +658,45 @@ export default class Portfolio extends React.Component {
     this.setState({ searchSel: next });
   }
 
+  // Which step inside its section a result lives at. Nothing new goes in the
+  // index for this — role chunks already carry 'job-<id>' and project chunks
+  // already carry the project key. Everything else is a one-shot section where
+  // step 0 is the only answer.
+  resultStep(r) {
+    if (!r) return 0;
+    if (r.openProject) {
+      const i = CONTENT.projects.findIndex((p) => p.key === r.openProject);
+      return i < 0 ? 0 : i;
+    }
+    if (r.anchorId && r.anchorId.indexOf('job-') === 0) {
+      const id = r.anchorId.slice(4);
+      const i = CONTENT.experience.findIndex((j) => j.id === id);
+      return i < 0 ? 0 : i;
+    }
+    return 0;
+  }
+
   activateResult(r) {
     if (!r) return;
     // Close first: it restores focus to the trigger, so openProjectModal's
     // _prevFocus capture grabs that rather than <body>.
     this.closeSearch();
+    const step = this.resultStep(r);
     if (r.openProject) {
-      // Don't also scroll — openProjectModal sets overflow:hidden, which kills an
-      // in-flight smooth scroll. Hand it to closeProjectModal instead.
-      this._pendingScroll = r.anchorId;
-      this.openProjectModal(r.openProject);
+      // Scroll first, open second. The rail's travel *is* the horizontal scroll
+      // to that card, so a single vertical scroll to the project's step visibly
+      // carries the rail to it — and the dialog then opens over the right card
+      // instead of covering the journey to it.
+      const y = this.scrollToSection('projects', step);
+      const open = () => { this.flashTarget('projects'); this.openProjectModal(r.openProject); };
+      // Already there (searching a project while standing on it) means no scroll
+      // will happen and no scrollend will ever come.
+      if (y == null || Math.abs(window.scrollY - y) < 2) open();
+      else this.afterScroll(open);
     } else {
-      this.scrollToSection(r.anchorId);
+      // r.section is the pinned track; r.anchorId may be a job panel inside it,
+      // which is what the flash should land on.
+      this.scrollToSection(r.section || r.anchorId, step);
       this.flashTarget(r.anchorId);
     }
   }
