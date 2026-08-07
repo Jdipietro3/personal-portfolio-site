@@ -37,7 +37,7 @@
     experience: [
       // MITRE work is pending public-release review, so this entry stays deliberately
       // non-specific. Replace the bullets and tags once you know what you can describe.
-      { id: 'mitre', range: '2026 – Present', role: 'Software Engineering Intern', org: 'MITRE', dotColor: '#fff3d0', logo: './img/mitre.svg',
+      { id: 'mitre', range: '2026 – Present', role: 'Software Engineering Intern', org: 'MITRE', dotColor: '#fff3d0', logo: './img/mitre.svg', side_logo: './img/mitre-side.svg',
         // Bullets carry no trailing period: buildChunks joins them with '. ', so a
         // period here produces 'team..' in the indexed text.
         bullets: [
@@ -46,7 +46,7 @@
         ],
         tags: ['Software Engineering'] },
 
-      { id: 'dovetail', range: 'May 2024 – Present', role: 'Junior Software Developer', org: 'Dovetail Internet Technologies', dotColor: '#f8d488', logo: './img/dovetail.svg',
+      { id: 'dovetail', range: 'May 2024 – Present', role: 'Junior Software Developer', org: 'Dovetail Internet Technologies', dotColor: '#f8d488', logo: './img/dovetail.svg', side_logo: './img/dovetail-side.svg',
         bullets: [
           'Build and maintain features in CyberStore, a C#/.NET e-commerce platform that synchronises inventory, orders, and customer data directly with SYSPRO ERP systems',
           'Work across the full stack of a large ASP.NET application — front-end behaviour in JavaScript and AJAX, business logic in C#, and the SQL underneath it',
@@ -59,7 +59,7 @@
         ],
         tags: ['C#', '.NET', 'SQL', 'JavaScript'] },
 
-      { id: 'mastercam', range: 'Jun 2022 – Aug 2022', role: 'Software Engineering Intern', org: 'Mastercam', dotColor: '#fff3d0', logo: './img/mastercam.svg',
+      { id: 'mastercam', range: 'Jun 2022 – Aug 2022', role: 'Software Engineering Intern', org: 'Mastercam', dotColor: '#fff3d0', logo: './img/mastercam.svg', side_logo: './img/mastercam-side.svg',
         bullets: [
           'Contributed to pre-release development of Mastercam products as part of an agile scrum team',
           'Worked daily with software engineers and quality control to identify, resolve, and verify defects',

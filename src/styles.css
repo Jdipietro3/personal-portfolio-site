@@ -136,13 +136,15 @@ a:hover { color: #ffb37a; }
 .timeline-item { position: relative; }
 .timeline-dot { position: absolute; left: -33.5px; top: 4px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 4px #08080a; }
 .timeline-range { font-size: 11.5px; color: rgba(242,241,236,0.45); letter-spacing: 0.06em; margin-bottom: 6px; }
-/* Role/org stack on the left, the company mark right-aligned on the same row.
-   .timeline-header-text shrinks first (min-width:0) so a long org name like
-   "Dovetail Internet Technologies" wraps instead of pushing the mark out. */
-.timeline-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.timeline-header-text { min-width: 0; flex: 1 1 auto; }
-.timeline-logo { flex: none; width: 40px; height: 40px; object-fit: contain; }
-.timeline-role { font-size: 17px; font-weight: 700; color: #f2f1ec; }
+/* Role sits on a row with the company mark, right-aligned and vertically
+   centered on the title itself (not the whole role+org block) — the mark is
+   sized well past the title's line-height, so aligning it to the row's own
+   text baseline is what keeps it looking "inline" rather than floating. Org
+   drops to its own line below, full width. */
+.timeline-header { display: flex; flex-direction: column; gap: 2px; }
+.timeline-role-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.timeline-logo { flex: none; width: 96px; height: auto; object-fit: contain; }
+.timeline-role { font-size: 17px; font-weight: 700; color: #f2f1ec; min-width: 0; }
 .timeline-org { font-size: 13.5px; margin-bottom: 12px; }
 .timeline-bullets { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .timeline-bullet { font-size: 14px; color: rgba(242,241,236,0.75); line-height: 1.6; padding-left: 16px; position: relative; }

@@ -1336,7 +1336,7 @@ export default class Portfolio extends React.Component {
                   <div className="exp-rail-logos" aria-hidden="true">
                     {experience.map((job, i) => <React.Fragment key={job.id}>
                       <div className="exp-rail-logo" data-pin={pExp.at(i)}>
-                        {job.logo ? <img src={job.logo} alt="" className="exp-rail-logo-img" /> : null}
+                        {job.side_logo ? <img src={job.side_logo} alt="" className="exp-rail-logo-img" /> : null}
                       </div>
                     </React.Fragment>)}
                   </div>
@@ -1351,11 +1351,11 @@ export default class Portfolio extends React.Component {
                         <div className="timeline-dot" style={{ background: job.dotColor }}></div>
                         <div className="timeline-range">{job.range}</div>
                         <div className="timeline-header">
-                          <div className="timeline-header-text">
+                          <div className="timeline-role-row">
                             <div className="timeline-role">{job.role}</div>
-                            <div className="timeline-org" style={{ color: job.dotColor }}>{job.org}</div>
+                            {job.logo ? <img src={job.logo} alt="" className="timeline-logo" /> : null}
                           </div>
-                          {job.logo ? <img src={job.logo} alt="" className="timeline-logo" /> : null}
+                          <div className="timeline-org" style={{ color: job.dotColor }}>{job.org}</div>
                         </div>
                         <div className="timeline-bullets">
                           {job.bullets.map((b, i) => <React.Fragment key={i}>
