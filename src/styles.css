@@ -439,21 +439,30 @@ a:hover { color: #ffb37a; }
    z-index:auto, so without it the overlays would paint under the cards they
    fade. They stay inside .content-wrap's stacking context on purpose: they only
    need to clear the rail's own cards, which are in that same context. */
-.js-pin #projects .proj-rail-viewport {
-  overflow: visible;
-  position: relative;
-}
 .js-pin #projects .proj-rail-viewport::before,
 .js-pin #projects .proj-rail-viewport::after {
   content: '';
   position: absolute;
   top: 0; bottom: 0;
-  width: 9%;
   z-index: 1;
   pointer-events: none;   /* the cards under them are role="button" */
 }
-.js-pin #projects .proj-rail-viewport::before { left: 0; background: linear-gradient(90deg, #08080a 0%, transparent 100%); }
-.js-pin #projects .proj-rail-viewport::after { right: 0; background: linear-gradient(270deg, #08080a 0%, transparent 100%); }
+/* The emphasised card sits on the left gutter now, not centred, so the left fade
+   can no longer use the same flat 9% as the right one — at a 1200px viewport the
+   text column starts around 74px and a 9% fade runs to 108px, which would wash
+   over the left edge of the one card on the stage that must stay crisp. --rail-
+   gutter is the exact column offset measureRail() cached, so the fade stops
+   precisely where the gutter starts rather than guessing at it. */
+.js-pin #projects .proj-rail-viewport::before { left: 0; width: var(--rail-gutter, 9%); background: linear-gradient(90deg, #08080a 0%, transparent 100%); }
+.js-pin #projects .proj-rail-viewport::after { right: 0; width: 9%; background: linear-gradient(270deg, #08080a 0%, transparent 100%); }
+/* --rail-x and --rail-gutter both live here, not on .proj-rail. Custom properties
+   only inherit downward, and the fades above are this element's own pseudo-
+   elements — a var set on .proj-rail (this element's child) could never reach
+   them. .proj-rail picks up --rail-x by inheritance for its own transform. */
+.js-pin #projects .proj-rail-viewport {
+  overflow: visible;
+  position: relative;
+}
 /* position:relative because measureRail() reads card.offsetLeft and needs the
    rail itself to be the offsetParent. No transition on the transform: --rail-x
    is rewritten every scroll frame, and a transition would make it lag the scroll

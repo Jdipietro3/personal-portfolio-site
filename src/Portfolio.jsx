@@ -135,7 +135,7 @@ export default class Portfolio extends React.Component {
     // handle componentWillUnmount cancels.
     this._pinRetried = false;
     this._pinRetryRaf = null;
-    // { centres: number[], viewW } for the projects rail — see measureRail().
+    // { edges: number[], viewW, gutter } for the projects rail — see measureRail().
     this._rail = null;
   }
 
@@ -309,7 +309,7 @@ export default class Portfolio extends React.Component {
   }
 
   // Where each project card sits along the rail, measured once per layout rather
-  // than per frame. Card widths differ — featured cards are wider — so centring
+  // than per frame. Card widths differ — featured cards are wider — so aligning
   // one cannot be CSS arithmetic; it needs the real numbers. Same cache-then-do-
   // arithmetic shape as _pinTops, so the scroll handler still reads no layout.
   measureRail() {
@@ -317,22 +317,33 @@ export default class Portfolio extends React.Component {
     if (!rail) { this._rail = null; return false; }
     const cards = rail.querySelectorAll(':scope > .proj-card');
     // A count mismatch means the rail isn't laid out the way the engine thinks it
-    // is, and centring against it would put cards anywhere. Treat it as a failure.
+    // is, and aligning against it would put cards anywhere. Treat it as a failure.
     if (cards.length !== PIN_SPEC.projects.steps) { this._rail = null; return false; }
-    const centres = [];
+    const edges = [];
     // .proj-rail is position:relative while pinned, so it is the offsetParent and
     // these are rail-relative without any rect arithmetic.
-    cards.forEach((c) => centres.push(c.offsetLeft + c.offsetWidth / 2));
+    cards.forEach((c) => edges.push(c.offsetLeft));
     const viewport = rail.parentElement;
     if (!viewport) { this._rail = null; return false; }
-    this._rail = { centres, viewW: viewport.clientWidth };
+    // The emphasised card lands on the same left margin the kicker and title
+    // already sit on. .js-pin #projects .section-title is the source of truth for
+    // that column (max-width: 1100px; margin: 0 auto; padding: 0 24px) — read its
+    // left content edge rather than re-deriving the column math in JS, which
+    // would duplicate the CSS rule and drift the moment the column changes.
+    const title = document.querySelector('.js-pin #projects .section-title');
+    if (!title) { this._rail = null; return false; }
+    const titleRect = title.getBoundingClientRect();
+    const titlePadLeft = parseFloat(window.getComputedStyle(title).paddingLeft) || 0;
+    const viewportRect = viewport.getBoundingClientRect();
+    const gutter = titleRect.left + titlePadLeft - viewportRect.left;
+    this._rail = { edges, viewW: viewport.clientWidth, gutter };
     return true;
   }
 
-  // Puts card `i` at the centre of the rail by scrolling the page to that card's
-  // point along the projects track. Focus and the rail must never disagree: a
-  // card that has keyboard focus but sits off the side of the stage is a card
-  // nobody can see they are on.
+  // Puts card `i` in the emphasised slot on the rail by scrolling the page to
+  // that card's point along the projects track. Focus and the rail must never
+  // disagree: a card that has keyboard focus but sits off the side of the stage
+  // is a card nobody can see they are on.
   scrollRailTo(i) {
     if (!this.state.pinned || !this._pinTops) return;
     this.cancelAfterScroll();   // same supersede rule as scrollToSection
@@ -343,20 +354,21 @@ export default class Portfolio extends React.Component {
     window.scrollTo({ top: Math.round(this._pinTops.projects + span * p), behavior: 'auto' });
   }
 
-  // Horizontal offset that puts the current point along the rail dead centre.
-  // Interpolating between neighbouring card centres rather than snapping to one
-  // is what makes the rail travel continuously while each card still lands
-  // centred exactly at its own step.
+  // Horizontal offset that puts the current point along the rail on the left
+  // gutter — the same margin the kicker and title sit on. Interpolating between
+  // neighbouring card left edges rather than snapping to one is what makes the
+  // rail travel continuously while each card still lands on the gutter exactly
+  // at its own step.
   computeRail(p) {
     const rail = this._rail;
     if (!rail || p == null) return null;
-    const c = rail.centres;
-    if (c.length === 0) return null;
-    if (c.length === 1) return rail.viewW / 2 - c[0];
-    const pos = p * (c.length - 1);
-    const i = Math.min(c.length - 2, Math.floor(pos));
+    const e = rail.edges;
+    if (e.length === 0) return null;
+    if (e.length === 1) return rail.gutter - e[0];
+    const pos = p * (e.length - 1);
+    const i = Math.min(e.length - 2, Math.floor(pos));
     const t = pos - i;
-    return rail.viewW / 2 - (c[i] + (c[i + 1] - c[i]) * t);
+    return rail.gutter - (e[i] + (e[i + 1] - e[i]) * t);
   }
 
   // The only layout read the pin engine ever does, and it happens on mount,
@@ -938,13 +950,23 @@ export default class Portfolio extends React.Component {
     // The rail's own offset. Null whenever pinning is off, which leaves the plain
     // grid in charge rather than a transform on a non-existent rail.
     const railData = pinned && pinData ? pinData.projects : null;
+    // Both custom properties live on .proj-rail-viewport, not .proj-rail. The edge
+    // fades are the viewport's own ::before/::after pseudo-elements, and custom
+    // properties only inherit downward — a var written on .proj-rail (the
+    // viewport's child) can never reach its parent's pseudo-elements. .proj-rail
+    // picks up --rail-x by inheritance instead of setting it itself.
     const railStyle = railData && railData.railX != null
-      ? { '--rail-x': railData.railX.toFixed(1) + 'px' } : null;
-    // Which card is nearest centre. Two values, because two consumers want
-    // different answers before the track has been entered: the rail already sits
-    // with card 0 dead centre by then, so *emphasis* clamps to 0 rather than
-    // dimming a card that is plainly the one you're looking at — while the
-    // counter keeps the -1 so its 00 stays honest about not having arrived.
+      ? {
+          '--rail-x': railData.railX.toFixed(1) + 'px',
+          '--rail-gutter': (this._rail && this._rail.gutter != null ? this._rail.gutter.toFixed(1) + 'px' : '9%')
+        }
+      : null;
+    // Which card is in the emphasised slot on the gutter. Two values, because two
+    // consumers want different answers before the track has been entered: the
+    // rail already sits with card 0 on the gutter by then, so *emphasis* clamps
+    // to 0 rather than dimming a card that is plainly the one you're looking at —
+    // while the counter keeps the -1 so its 00 stays honest about not having
+    // arrived.
     const railCounter = railData && railData.step >= 0
       ? Math.round(railData.p * (PIN_SPEC.projects.steps - 1)) : -1;
     const railFocus = Math.max(0, railCounter);
@@ -991,8 +1013,9 @@ export default class Portfolio extends React.Component {
       return v;
     });
 
-    // Reads 01..NN once a card is centred and 00 before the track is entered,
-    // which is the honest answer rather than pretending the first one is up.
+    // Reads 01..NN once a card is on the gutter and 00 before the track is
+    // entered, which is the honest answer rather than pretending the first one
+    // is up.
     const projCounter = String(railCounter + 1).padStart(2, '0');
 
     const openProj = this.state.openProject != null ? projects.find((p) => p.key === this.state.openProject) : null;
@@ -1383,8 +1406,9 @@ export default class Portfolio extends React.Component {
           </section>
 
           {/* PROJECTS — a rail. Scrolling down travels the row sideways; the card
-              nearest centre is emphasised and its neighbours stay visible either
-              side, so several are readable at once and it's obvious there's more.
+              on the left gutter — the same margin the kicker and title sit on —
+              is emphasised, and its neighbours stay visible either side, so
+              several are readable at once and it's obvious there's more.
 
               .proj-rail is display:contents when the engine is off, which drops
               the cards straight back into .project-grid as its own grid items —
@@ -1399,8 +1423,8 @@ export default class Portfolio extends React.Component {
               <div className="pin-inner">
                 <div className="section-kicker">SYS.04 // PROJECTS</div>
                 <h2 className="section-title">Project Work</h2>
-                <div className="project-grid proj-rail-viewport">
-                <div className="proj-rail" style={railStyle}>
+                <div className="project-grid proj-rail-viewport" style={railStyle}>
+                <div className="proj-rail">
 
               {/* One pass over `projects` in content order, branching on
                   `featured`, rather than the featured list followed by the grid
