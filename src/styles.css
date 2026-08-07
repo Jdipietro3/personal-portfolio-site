@@ -136,6 +136,12 @@ a:hover { color: #ffb37a; }
 .timeline-item { position: relative; }
 .timeline-dot { position: absolute; left: -33.5px; top: 4px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 4px #08080a; }
 .timeline-range { font-size: 11.5px; color: rgba(242,241,236,0.45); letter-spacing: 0.06em; margin-bottom: 6px; }
+/* Role/org stack on the left, the company mark right-aligned on the same row.
+   .timeline-header-text shrinks first (min-width:0) so a long org name like
+   "Dovetail Internet Technologies" wraps instead of pushing the mark out. */
+.timeline-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.timeline-header-text { min-width: 0; flex: 1 1 auto; }
+.timeline-logo { flex: none; width: 40px; height: 40px; object-fit: contain; }
 .timeline-role { font-size: 17px; font-weight: 700; color: #f2f1ec; }
 .timeline-org { font-size: 13.5px; margin-bottom: 12px; }
 .timeline-bullets { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -363,6 +369,22 @@ a:hover { color: #ffb37a; }
   background: var(--dot-color); transform: scale(1.4);
   box-shadow: 0 0 0 4px #08080a, 0 0 0 5px rgba(248,212,136,0.18), 0 0 14px 1px var(--dot-color);
 }
+/* Company mark, left of the rail dot. Its own column, distributed by the same
+   space-between rule as .exp-rail so the marks stay level with the dots as the
+   stack's height changes — three jobs today, N tomorrow, no hardcoded offsets.
+   Same three-state treatment as the dots, reusing their transition token and
+   duration so the rail reads as one instrument. */
+.js-pin .exp-rail-logos {
+  display: flex; flex-direction: column; justify-content: space-between;
+  align-items: center; position: relative; flex: none; padding: 6px 0;
+}
+.js-pin .exp-rail-logo {
+  width: 20px; height: 20px; flex: none;
+  opacity: 0.4;
+  transition: opacity 320ms var(--ease-out-quart);
+}
+.js-pin .exp-rail-logo[data-pin="active"] { opacity: 1; }
+.js-pin .exp-rail-logo-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 /* All three jobs share one box; content is centred so the differing bullet
    counts don't shift the panel's weight as it swaps. */
 .js-pin .exp-stack { position: relative; flex: 1; min-width: 0; }
@@ -528,6 +550,7 @@ a:hover { color: #ffb37a; }
    must render as nothing in the plain document. Deliberately outside the
    no-preference block — these have to stay hidden under reduce-motion too. */
 .exp-rail { display: none; }
+.exp-rail-logos { display: none; }
 .proj-pin-progress { display: none; }
 .proj-pin-noimage-fill { display: none; }
 
