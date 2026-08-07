@@ -828,12 +828,9 @@ export default class Portfolio extends React.Component {
       return v;
     });
 
-    const featuredProjects = projects.filter((p) => p.featured);
-    const gridProjects = projects.filter((p) => !p.featured);
-    // Reads 01..05 while a card is on stage and 00 before the track is entered,
+    // Reads 01..NN once a card is centred and 00 before the track is entered,
     // which is the honest answer rather than pretending the first one is up.
-    const projActive = projects.findIndex((_, i) => pProj.at(i) === 'active');
-    const projCounter = String(projActive + 1).padStart(2, '0');
+    const projCounter = String(railFocus + 1).padStart(2, '0');
 
     const openProj = this.state.openProject != null ? projects.find((p) => p.key === this.state.openProject) : null;
     const modal = openProj ? {
@@ -1115,10 +1112,10 @@ export default class Portfolio extends React.Component {
                         <p className="about-para">{para}</p>
                       </React.Fragment>)}
                     </div>
-                    <div className="pin-step about-step-status" data-pin={pAbout.at(1)} inert={pAbout.inert(1)}>
-                      {/* The status is a log line, so it types out. The reveal is
-                          scroll-linked rather than timed: you scrub it out, which
-                          is both more interesting and needs no timer to clean up. */}
+                    <div className="pin-step about-step-status" data-pin={pAbout.at(0)} inert={pAbout.inert(0)}>
+                      {/* The status is a log line, so it types out — on arrival,
+                          as the third beat of one sequence, rather than scrubbed
+                          against how far you have scrolled. */}
                       <p className="about-status">
                         <span className="about-status-wrap">
                           <span className="about-status-type">{about.status}</span>
@@ -1176,37 +1173,39 @@ export default class Portfolio extends React.Component {
             </div>
           </section>
 
-          {/* EDUCATION — accumulate: the record prints, then the GPA fills.
-              pin-step goes straight onto the two grid children rather than onto
-              wrappers around them, so .edu-json keeps being the grid cell and its
-              full-height divider border still spans the row. */}
+          {/* EDUCATION — one-shot: the record reads out, then the coursework
+              lands. A <dl>, because these are key/value pairs and a screen reader
+              should hear them paired rather than as two unrelated columns. The
+              leader dots are a ::after on the <dt>, not an element between dt and
+              dd — a div inside a dl may only contain dt and dd, so a stray span
+              there is invalid and puts unassociated content in the list. */}
           <section id="education" className="section pin-track" style={pEdu.trackStyle}>
             <div className="pin-stage" style={pEdu.stageStyle}>
               <div className="pin-inner">
                 <div className="section-kicker">SYS.03 // EDUCATION</div>
                 <h2 className="section-title">Education</h2>
-                <div className="edu-grid">
-                  <div className="edu-json pin-step" data-pin={pEdu.at(0)} inert={pEdu.inert(0)}>
-                    <div style={{ '--i': 0 }}><span className="edu-punct">{'{'}</span></div>
-                    <div className="edu-field" style={{ '--i': 1 }}><span className="edu-key">"institution"</span>: <span className="text-gold">"{education.institution}"</span>,</div>
-                    <div className="edu-field" style={{ '--i': 2 }}><span className="edu-key">"degree"</span>: <span className="text-gold">"{education.degree}"</span>,</div>
-                    <div className="edu-field" style={{ '--i': 3 }}><span className="edu-key">"focus"</span>: <span className="text-gold">"{education.focus}"</span>,</div>
-                    <div className="edu-field" style={{ '--i': 4 }}><span className="edu-key">"graduation"</span>: <span className="text-gold">"{education.graduation}"</span>,</div>
-                    <div className="edu-field" style={{ '--i': 5 }}><span className="edu-key">"honors"</span>: <span className="text-gold">"{education.honors}"</span>,</div>
-                    <div className="edu-field" style={{ '--i': 6 }}><span className="edu-key">"coursework"</span>: [</div>
-                    {education.coursework.map((c, i) => <React.Fragment key={i}>
-                      <div className="edu-array-item" style={{ '--i': 7 + i }}><span className="text-gold">"{c}"</span>,</div>
+                <div className="pin-step" data-pin={pEdu.at(0)} inert={pEdu.inert(0)}>
+                  <dl className="edu-readout">
+                    {[
+                      ['institution', education.institution],
+                      ['degree', education.degree],
+                      ['focus', education.focus],
+                      ['graduation', education.graduation],
+                      ['honors', education.honors]
+                    ].map(([label, value], i) => <React.Fragment key={label}>
+                      <div className="edu-row" style={{ '--i': i }}>
+                        <dt className="edu-label">{label}</dt>
+                        <dd className="edu-value">{value}</dd>
+                      </div>
                     </React.Fragment>)}
-                    <div className="edu-field" style={{ '--i': 7 + education.coursework.length }}>]</div>
-                    <div style={{ '--i': 8 + education.coursework.length }}><span className="edu-punct">{'}'}</span></div>
-                  </div>
-                  <div className="edu-gpa-col pin-step" data-pin={pEdu.at(1)} inert={pEdu.inert(1)}>
-                    <div className="edu-gpa-label">GPA</div>
-                    <div className="edu-gpa-row">
-                      <div className="edu-gpa-value">{education.gpa}</div>
-                    </div>
-                    <div className="progress-track">
-                      <div className="progress-fill" style={{ width: `${education.gpaPct}%` }}></div>
+                  </dl>
+
+                  <div className="edu-course-block">
+                    <div className="skills-group-title edu-course-title">COURSEWORK</div>
+                    <div className="edu-course-grid">
+                      {education.coursework.map((c, i) => <React.Fragment key={c}>
+                        <div className="edu-course-chip" style={{ '--i': i }}>{c}</div>
+                      </React.Fragment>)}
                     </div>
                   </div>
                 </div>
@@ -1214,22 +1213,44 @@ export default class Portfolio extends React.Component {
             </div>
           </section>
 
-          {/* PROJECTS — swap: one card at a time, each large enough to read.
-              This is the section that fits worst as a grid (over three viewports)
-              and the one that gains most from getting a whole stage per card.
-              Step index is the project's position in the full 5-item array, which
-              featuredProjects (0,1) and gridProjects (2,3,4) partition in order. */}
+          {/* PROJECTS — a rail. Scrolling down travels the row sideways; the card
+              nearest centre is emphasised and its neighbours stay visible either
+              side, so several are readable at once and it's obvious there's more.
+
+              .proj-rail is display:contents when the engine is off, which drops
+              the cards straight back into .project-grid as its own grid items —
+              the unpinned layout is then exactly what it always was. While pinned
+              it becomes the flex rail, and position:relative so measureRail()'s
+              offsetLeft reads are rail-relative.
+
+              Every index — rail position, dot, counter, focus — is the project's
+              index in `projects`, which is why the cards render in one pass. */}
           <section id="projects" className="section section--wide pin-track" style={pProj.trackStyle}>
             <div className="pin-stage" style={pProj.stageStyle}>
               <div className="pin-inner">
                 <div className="section-kicker">SYS.04 // PROJECTS</div>
                 <h2 className="section-title">Project Work</h2>
-                <div className="project-grid">
+                <div className="project-grid proj-rail-viewport">
+                <div className="proj-rail" style={railStyle}>
 
-              {featuredProjects.map((proj, i) => <React.Fragment key={i}>
-                <div className="proj-card pin-step" data-pin={pProj.at(i)} inert={pProj.inert(i)} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} style={proj.heroStyle}>
+              {/* One pass over `projects` in content order, branching on
+                  `featured`, rather than the featured list followed by the grid
+                  list. Those two orders happen to agree only while every featured
+                  project sits at the front of the array — add a featured one at
+                  the end and the rail's DOM order, the dot row's content order,
+                  and the counter all start pointing at different projects. One
+                  pass makes every index the same index by construction. */}
+              {projects.map((proj, i) => <React.Fragment key={proj.key}>
+                {proj.featured ? (
+                <div className="proj-card proj-card--featured" data-rail={railFocus === i ? 'focus' : 'off'} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} onFocus={() => this.scrollRailTo(i)} style={proj.heroStyle}>
                   <div className="proj-pin-imgwrap" style={proj.heroImgWrapStyle}>
-                    <img src={proj.image} alt={proj.imageAlt} className="proj-hero-img" />
+                    {proj.hasImage ? (
+                      <img src={proj.image} alt={proj.imageAlt} className="proj-hero-img" />
+                    ) : (
+                      <div className="proj-hero-img proj-pin-noimage-fill" aria-hidden="true" style={{ color: proj.dotColor }}>
+                        <span className="proj-pin-noimage-glyph">{'</>'}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="proj-hero-body">
                     <div className="proj-title-row">
@@ -1246,10 +1267,8 @@ export default class Portfolio extends React.Component {
                     <div className="proj-open-link" style={{ color: proj.dotColor }}>open details →</div>
                   </div>
                 </div>
-              </React.Fragment>)}
-
-              {gridProjects.map((proj, i) => <React.Fragment key={i}>
-                <div className="proj-card panel proj-grid-card pin-step" data-pin={pProj.at(featuredProjects.length + i)} inert={pProj.inert(featuredProjects.length + i)} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey}>
+                ) : (
+                <div className="proj-card panel proj-grid-card" data-rail={railFocus === i ? 'focus' : 'off'} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} onFocus={() => this.scrollRailTo(i)}>
                   <div className="proj-card-titlebar">
                     <div className="proj-dot-sm" style={{ background: proj.dotColor }}></div>
                     <div className="proj-card-title">{proj.name}</div>
@@ -1257,9 +1276,10 @@ export default class Portfolio extends React.Component {
                   {proj.hasImage ? <>
                     <img src={proj.image} alt={proj.imageAlt} className="proj-card-img" />
                   </> : <>
-                    {/* One project has no screenshot. On the grid that's fine —
-                        the card is short. On a full stage it would read as a
-                        missing asset, so a stand-in holds the slot. Pin-only. */}
+                    {/* A project with no screenshot is fine on the grid — the card
+                        is just shorter. On a rail where every card is the same
+                        height it would read as a missing asset, so a stand-in
+                        holds the slot. Pin-only; display:none otherwise. */}
                     <div className="proj-card-img proj-pin-noimage-fill" aria-hidden="true" style={{ color: proj.dotColor }}>
                       <span className="proj-pin-noimage-glyph">{'</>'}</span>
                     </div>
@@ -1274,16 +1294,19 @@ export default class Portfolio extends React.Component {
                     <div className="proj-open-link-sm" style={{ color: proj.dotColor }}>open details →</div>
                   </div>
                 </div>
+                )}
               </React.Fragment>)}
 
                 </div>
+                </div>
 
-                {/* Position indicator, pin-only. Five dots in each project's own
-                    colour plus a counter, so it's obvious how many are left. */}
+                {/* Position indicator, pin-only. One dot per project in its own
+                    colour plus a counter, both driven off the array, so adding a
+                    project extends them with no change here. */}
                 <div className="proj-pin-progress" aria-hidden="true">
                   <div className="proj-pin-dots">
                     {projects.map((proj, i) => <React.Fragment key={i}>
-                      <span className={pProj.at(i) === 'active' ? 'proj-pin-dot is-active' : 'proj-pin-dot'} style={{ background: proj.dotColor }}></span>
+                      <span className={railFocus === i ? 'proj-pin-dot is-active' : 'proj-pin-dot'} style={{ background: proj.dotColor }}></span>
                     </React.Fragment>)}
                   </div>
                   <div className="proj-pin-counter">{projCounter} / {String(pProj.steps).padStart(2, '0')}</div>
@@ -1304,9 +1327,11 @@ export default class Portfolio extends React.Component {
                 <h2 className="section-title section-title--tight">Skills</h2>
                 <div className="skills-blurb">{skillsBlurb}</div>
 
-                <div className="skills-groups">
+                {/* One step for the section now, not one per group. --g sequences
+                    the groups; --i staggers the chips inside each. */}
+                <div className="skills-groups pin-step" data-pin={pSkills.at(0)} inert={pSkills.inert(0)}>
                   {skills.map((g, i) => <React.Fragment key={i}>
-                    <div className="pin-step skills-step" data-pin={pSkills.at(i)} inert={pSkills.inert(i)}>
+                    <div className="skills-step" style={{ '--g': i }}>
                       <div className="skills-group-title">{g.title}</div>
                       <div className="tag-row">
                         {g.items.map((s, j) => <React.Fragment key={j}>
