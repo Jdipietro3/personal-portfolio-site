@@ -160,7 +160,11 @@ export default class Portfolio extends React.Component {
     this.onKeyDown = (e) => {
       if (e.key === 'Escape') {
         if (this.state.openProject != null) { this.closeProjectModal(); return; }
-        if (this.state.searchOpen) this.closeSearch();
+        if (this.state.searchOpen) { this.closeSearch(); return; }
+        // Nothing is open, but a project result may have a modal queued behind an
+        // in-flight scroll. Escape means "never mind" there too — without this it
+        // hits neither branch above and the modal still arrives on schedule.
+        this.cancelAfterScroll();
         return;
       }
       if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
@@ -331,6 +335,7 @@ export default class Portfolio extends React.Component {
   // nobody can see they are on.
   scrollRailTo(i) {
     if (!this.state.pinned || !this._pinTops) return;
+    this.cancelAfterScroll();   // same supersede rule as scrollToSection
     const steps = PIN_SPEC.projects.steps;
     if (steps < 2) return;
     const p = Math.max(0, Math.min(1, i / (steps - 1)));
@@ -455,9 +460,12 @@ export default class Portfolio extends React.Component {
   // Those four used to each compute their own, which is exactly why they
   // disagreed: a pinned section is a multi-viewport track whose stage locks at
   // its top, not a box you're 40% of a viewport away from.
-  sectionAnchor(id, step = 0) {
+  //
+  // `max` is the bottom of the scroll range, passed in by sectionAnchors() so a
+  // six-section pass reads scrollHeight once instead of six times.
+  sectionAnchor(id, step = 0, max) {
     if (typeof window === 'undefined') return null;
-    const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    if (max == null) max = this.scrollMax();
     // Pinned: the track top is the frame the stage locks, and each further step
     // sits at its own fraction of the travel. A one-step section has no
     // interior, so every step resolves to the top.
@@ -479,10 +487,17 @@ export default class Portfolio extends React.Component {
     return Math.max(0, Math.min(max, Math.round(y)));
   }
 
+  scrollMax() {
+    return Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  }
+
   // The six section anchors in order, measured once per scroll and handed to
-  // both consumers rather than each recomputing them.
+  // both consumers rather than each recomputing them. While pinned this is one
+  // layout read for the whole pass — five sections come from cached track tops,
+  // and only contact, which has no track, still measures.
   sectionAnchors() {
-    return SECTION_IDS.map((id) => this.sectionAnchor(id));
+    const max = this.scrollMax();
+    return SECTION_IDS.map((id) => this.sectionAnchor(id, 0, max));
   }
 
   computeFlow(anchors) {
@@ -536,6 +551,11 @@ export default class Portfolio extends React.Component {
   // Returns the scroll target it aimed at, so a caller that needs to act once the
   // page has arrived can tell whether it was already there.
   scrollToSection(id, step = 0) {
+    // Any new scroll supersedes a pending one. Without this, clicking a nav link
+    // while a search-driven project scroll is still travelling leaves that scroll's
+    // one-shot armed: the *nav* scroll's scrollend then fires it, yanking the page
+    // back to projects and opening a modal seconds after you navigated away.
+    this.cancelAfterScroll();
     const y = this.sectionAnchor(id, step);
     if (y == null) return null;
     const smooth = !(this._reduceMotion && this._reduceMotion.matches);
@@ -570,6 +590,10 @@ export default class Portfolio extends React.Component {
   // it eventually leaves the page permanently unscrollable.
   openSearch(triggerEl) {
     if (this.state.searchOpen) return;
+    // Reaching for search again abandons whatever the last result queued —
+    // otherwise a project modal from the previous search pops open on top of the
+    // palette you just opened.
+    this.cancelAfterScroll();
     this._searchTriggerEl = triggerEl && triggerEl.focus ? triggerEl : null;
     if (!this._searchIndex) {
       this._searchIndex = SearchIndex.buildIndex(SearchIndex.buildChunks(CONTENT));
@@ -739,6 +763,14 @@ export default class Portfolio extends React.Component {
         // wrong when it didn't.
         if (y != null && Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: y, behavior: 'auto' });
         this.flashTarget('projects');
+        // Put focus on the card we actually landed on before the dialog captures
+        // _prevFocus. Otherwise focus is still wherever search was opened from —
+        // and if that was a *different* rail card, closing the dialog focuses it,
+        // its onFocus fires scrollRailTo, and the rail slides away from the
+        // project you were just reading. preventScroll because the page is
+        // already exactly where it should be.
+        const card = document.querySelectorAll('#projects .proj-card')[step];
+        if (card && card.focus) card.focus({ preventScroll: true });
         this.openProjectModal(r.openProject);
       };
       // Already there — searching a project while standing on it — means no
