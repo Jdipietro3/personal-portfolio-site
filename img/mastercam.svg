@@ -1,5 +1,9 @@
+<!-- Placeholder artwork, not the real Mastercam mark. Two letters rather than
+     one: MITRE is also an M, and at 20px on the rail a lone initial made the two
+     employers indistinguishable. Swap this file for the real logo when you have
+     one — content.js points at it by path, so nothing else has to change. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Placeholder artwork: Mastercam company mark">
   <rect width="64" height="64" fill="#0e0e11"/>
   <rect x="4" y="4" width="56" height="56" rx="8" fill="none" stroke="#fff3d0" stroke-opacity="0.4" stroke-width="2"/>
-  <text x="32" y="33" fill="#fff3d0" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="30" font-weight="700" text-anchor="middle" dominant-baseline="central">M</text>
+  <text x="32" y="33" fill="#fff3d0" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="24" font-weight="700" letter-spacing="-1" text-anchor="middle" dominant-baseline="central">MC</text>
 </svg>

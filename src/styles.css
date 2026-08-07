@@ -346,19 +346,26 @@ a:hover { color: #ffb37a; }
 
 /* EXPERIENCE — swap, with the rail as the position indicator. ---------------- */
 .js-pin .exp-timeline {
-  display: flex; flex-direction: row; align-items: stretch; gap: 36px;
+  /* --exp-node is the node size, shared by the dot column and the logo column.
+     Both distribute their items space-between over the same height, so their
+     items have to be the same height or the two columns' centres drift apart at
+     the ends while agreeing in the middle. --exp-gap is named so the logo
+     column can pull itself back in against it — see .exp-rail-logos. */
+  --exp-node: 9px;
+  --exp-gap: 36px;
+  display: flex; flex-direction: row; align-items: stretch; gap: var(--exp-gap);
   border-left: none; padding-left: 0; height: 320px;
 }
 .js-pin .exp-rail {
   display: flex; flex-direction: column; justify-content: space-between;
-  align-items: center; position: relative; width: 9px; flex: none; padding: 6px 0;
+  align-items: center; position: relative; width: var(--exp-node); flex: none; padding: 6px 0;
 }
 .js-pin .exp-rail::before {
   content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
   background: rgba(255,255,255,0.12); transform: translateX(-50%);
 }
 .js-pin .exp-rail-dot {
-  position: relative; z-index: 1; width: 9px; height: 9px; border-radius: 50%;
+  position: relative; z-index: 1; width: var(--exp-node); height: var(--exp-node); border-radius: 50%;
   background: rgba(255,255,255,0.16); box-shadow: 0 0 0 4px #08080a;
   transition: background-color 320ms var(--ease-out-quart),
               box-shadow 320ms var(--ease-out-quart),
@@ -373,18 +380,26 @@ a:hover { color: #ffb37a; }
    space-between rule as .exp-rail so the marks stay level with the dots as the
    stack's height changes — three jobs today, N tomorrow, no hardcoded offsets.
    Same three-state treatment as the dots, reusing their transition token and
-   duration so the rail reads as one instrument. */
+   duration so the rail reads as one instrument.
+   The negative margin cancels most of the timeline's own 36px column gap: the
+   mark belongs to its node, and a full gap away it reads as a third column
+   instead. Derived from --exp-gap rather than hardcoded so the two can't drift. */
 .js-pin .exp-rail-logos {
   display: flex; flex-direction: column; justify-content: space-between;
   align-items: center; position: relative; flex: none; padding: 6px 0;
+  margin-right: calc(12px - var(--exp-gap));
 }
+/* Each row is one node tall, not one mark tall — that is what keeps the two
+   columns' item centres identical at the ends, since space-between distributes
+   the *boxes*. The mark itself overflows that row symmetrically. */
 .js-pin .exp-rail-logo {
-  width: 20px; height: 20px; flex: none;
+  width: 20px; height: var(--exp-node); flex: none;
+  display: flex; align-items: center; justify-content: center;
   opacity: 0.4;
   transition: opacity 320ms var(--ease-out-quart);
 }
 .js-pin .exp-rail-logo[data-pin="active"] { opacity: 1; }
-.js-pin .exp-rail-logo-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.js-pin .exp-rail-logo-img { width: 20px; height: 20px; flex: none; object-fit: contain; display: block; }
 /* All three jobs share one box; content is centred so the differing bullet
    counts don't shift the panel's weight as it swaps. */
 .js-pin .exp-stack { position: relative; flex: 1; min-width: 0; }
