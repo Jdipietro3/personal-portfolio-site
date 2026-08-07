@@ -96,7 +96,12 @@ export default class Portfolio extends React.Component {
       // plain document with every step present. It only switches on once the
       // engine has decided the viewport allows it and has measured the tracks.
       pinned: false,
-      pins: null           // { [id]: { p, step, sp } } once measured
+      pins: null,          // { [id]: { p, step, sp } } once measured
+      // Gates about's typing on the real webfont. `1ch` is JetBrains Mono's
+      // advance width only once it has swapped in, and a swap mid-animation
+      // desyncs the caret from the text it's supposed to be sitting on. Fails
+      // open — see componentDidMount and .fonts-ready in styles.css.
+      fontsReady: false
     };
     // Search internals live off state: none of them should trigger a render, and
     // renderVals() runs on every scroll event.
@@ -187,7 +192,14 @@ export default class Portfolio extends React.Component {
         this.sizeCanvas();
         this.remeasurePins();
         this.syncNavIndicator(false);
+        this._safeSetState({ fontsReady: true });
       });
+    } else {
+      // Nothing to gate on, so don't gate. The reveal may then play against
+      // fallback metrics, which is what it did before this existed — the one
+      // outcome that must never happen, a permanently untyped or blank status
+      // line, is the thing this branch rules out.
+      this.setState({ fontsReady: true });
     }
     this.startLoop();
     this.setState({ pinned: this.pinAllowed() });
@@ -719,9 +731,18 @@ export default class Portfolio extends React.Component {
       // carries the rail to it — and the dialog then opens over the right card
       // instead of covering the journey to it.
       const y = this.scrollToSection('projects', step);
-      const open = () => { this.flashTarget('projects'); this.openProjectModal(r.openProject); };
-      // Already there (searching a project while standing on it) means no scroll
-      // will happen and no scrollend will ever come.
+      const open = () => {
+        // The 700ms fallback can fire while a slow smooth scroll is still in
+        // flight, and openProjectModal's overflow:hidden would then cancel it
+        // and strand the page short of the card. Snapping first costs nothing
+        // when the scroll did finish, and is the difference between right and
+        // wrong when it didn't.
+        if (y != null && Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: y, behavior: 'auto' });
+        this.flashTarget('projects');
+        this.openProjectModal(r.openProject);
+      };
+      // Already there — searching a project while standing on it — means no
+      // scroll will happen and no scrollend will ever come.
       if (y == null || Math.abs(window.scrollY - y) < 2) open();
       else this.afterScroll(open);
     } else {
@@ -1129,8 +1150,14 @@ export default class Portfolio extends React.Component {
       display: this.state.winW < 900 ? 'none' : 'block'
     };
 
+    // One place decides what rides on the root class. .fonts-ready only means
+    // anything alongside .js-pin, but it is written unconditionally rather than
+    // nested, so the two flags stay independent of each other.
+    const rootClass = 'page-root' + (pinned ? ' js-pin' : '') +
+      (this.state.fontsReady ? ' fonts-ready' : '');
+
     return (
-      <div className={pinned ? 'page-root js-pin' : 'page-root'}>
+      <div className={rootClass}>
 
         <canvas ref={this.canvasRef} className="bg-canvas"></canvas>
 
@@ -1227,7 +1254,7 @@ export default class Portfolio extends React.Component {
                           as the third beat of one sequence, rather than scrubbed
                           against how far you have scrolled. */}
                       <p className="about-status">
-                        <span className="about-status-wrap">
+                        <span className="about-status-wrap" style={{ '--about-status-len': String(about.status.length) }}>
                           <span className="about-status-type">{about.status}</span>
                           <span className="blink-cursor about-status-cursor">_</span>
                         </span>

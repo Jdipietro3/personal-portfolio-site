@@ -85,6 +85,16 @@ a:hover { color: #ffb37a; }
    are out of the accessibility tree and untabbable even if a section's own rules
    forget; the engine also marks them inert. */
 .js-pin .pin-step[data-pin="future"] { visibility: hidden; }
+/* Contact is deliberately not pinned — it's where someone acts, and the footer
+   has to stay reachable — but it should still come to rest filling the screen
+   like the five sections before it, rather than arriving as a short block at the
+   bottom. One viewport of min-height with the whole stack centred as a group
+   does it without a track: sectionAnchor()'s unpinned branch centres the element,
+   and an element that is already a viewport tall centres at its own top.
+   The vertical padding goes with it — justify-content centres inside the
+   content box, so contact's asymmetric 120/90 would leave the stack sitting
+   15px low against stages that have no padding at all. */
+.js-pin #contact { min-height: 100svh; display: flex; flex-direction: column; justify-content: center; padding-top: 0; padding-bottom: 0; }
 }
 
 /* --- hero --- */
@@ -290,14 +300,15 @@ a:hover { color: #ffb37a; }
    text appearing as the window draws down over it, not text arriving. */
 
 /* The status types. `steps()` is what makes it type rather than wipe: the text is
-   exactly 85 monospace characters, so .about-status-type is exactly 85ch wide and
-   one step of the clip is one character. The caret animates the same 85ch in the
-   same 85 steps, so it sits on the write head by construction rather than by
-   being kept in sync. Count is from content.js — verify it there if the copy
-   changes, because a wrong count desynchronises the caret from the text.
+   N monospace characters, so .about-status-type is exactly Nch wide and one step
+   of the clip is one character. The caret animates the same Nch in the same N
+   steps, so it sits on the write head by construction rather than by being kept
+   in sync. N is --about-status-len, emitted from about.status.length in the JSX
+   — it used to be a 85 hardcoded here and in both steps() calls, which meant
+   editing the copy in content.js silently parked the caret in empty space.
    This also retires the CSS round() the scrubbed version needed, which was the
    one modern-browser requirement in this file. */
-.js-pin .about-status-wrap { --about-status-len: 85; position: relative; display: inline-block; }
+.js-pin .about-status-wrap { position: relative; display: inline-block; }
 .js-pin .about-status-type { display: inline-block; white-space: pre; }
 /* transform, not `left` — the caret is animated, and `left` animates layout. */
 .js-pin .about-status-cursor { position: absolute; top: 0; left: 0; transform: translateX(calc(var(--about-status-len) * 1ch)); }
@@ -305,11 +316,26 @@ a:hover { color: #ffb37a; }
 @keyframes aboutType { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes aboutCaret { from { transform: translateX(0); } to { transform: translateX(calc(var(--about-status-len) * 1ch)); } }
 
-.js-pin .pin-step[data-pin="active"] .about-status-type {
-  animation: aboutType 1020ms steps(85, end) 560ms both;
+/* Gated on .fonts-ready as well as .js-pin. `1ch` is JetBrains Mono's advance
+   width only once the real face is active, and it loads with display=swap — a
+   swap landing mid-animation re-resolves both the clip percentages and the caret
+   offset under the caret. The gate fails open: .about-status-type carries no
+   clip-path outside this rule, so before it lands (or if it never does) the line
+   is simply fully visible and untyped. Never blank. */
+.js-pin.fonts-ready .pin-step[data-pin="active"] .about-status-type {
+  animation: aboutType 1020ms steps(var(--about-status-len), end) 560ms both;
 }
-.js-pin .pin-step[data-pin="active"] .about-status-cursor {
-  animation: aboutCaret 1020ms steps(85, end) 560ms both;
+/* Both animations in one shorthand, and that is the whole point of this rule's
+   shape. `animation` is a shorthand: a lone `animation: aboutCaret ...` here
+   doesn't merge with .blink-cursor's `animation: blink ...`, it replaces it — so
+   the blink wasn't being delayed, it was being erased, and because about is a
+   one-shot section whose step never leaves "active" the cursor then froze for
+   the rest of the visit. Listing both composes them instead: blink drives
+   opacity, aboutCaret drives transform, so the caret blinks while it types, the
+   way a real terminal does. */
+.js-pin.fonts-ready .pin-step[data-pin="active"] .about-status-cursor {
+  animation: aboutCaret 1020ms steps(var(--about-status-len), end) 560ms both,
+             blink 1.1s step-end infinite;
 }
 
 /* EXPERIENCE — swap, with the rail as the position indicator. ---------------- */
@@ -403,19 +429,40 @@ a:hover { color: #ffb37a; }
 
 /* overflow stays visible — cards spilling past the stage edges is the point, it
    is what tells you there is more in both directions. The page can't gain a
-   horizontal scrollbar from it because .page-root is overflow-x: clip. The mask
-   fades them out at the edges rather than letting them hard-cut at the viewport. */
+   horizontal scrollbar from it because .page-root is overflow-x: clip. Two
+   gradient overlays fade them at the edges rather than letting them hard-cut.
+   This was a mask-image, which is the more obvious tool but the wrong one here:
+   a mask has to be re-resolved against its content, and this content moves every
+   scroll frame. The page behind is a flat #08080a, so painting that colour over
+   the edges is indistinguishable from masking them away and costs nothing per
+   frame. z-index:1 is load-bearing — .proj-rail is position:relative with
+   z-index:auto, so without it the overlays would paint under the cards they
+   fade. They stay inside .content-wrap's stacking context on purpose: they only
+   need to clear the rail's own cards, which are in that same context. */
 .js-pin #projects .proj-rail-viewport {
   overflow: visible;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%);
+  position: relative;
 }
+.js-pin #projects .proj-rail-viewport::before,
+.js-pin #projects .proj-rail-viewport::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 9%;
+  z-index: 1;
+  pointer-events: none;   /* the cards under them are role="button" */
+}
+.js-pin #projects .proj-rail-viewport::before { left: 0; background: linear-gradient(90deg, #08080a 0%, transparent 100%); }
+.js-pin #projects .proj-rail-viewport::after { right: 0; background: linear-gradient(270deg, #08080a 0%, transparent 100%); }
 /* position:relative because measureRail() reads card.offsetLeft and needs the
    rail itself to be the offsetParent. No transition on the transform: --rail-x
-   is rewritten every scroll frame, and a transition would make it lag the scroll. */
+   is rewritten every scroll frame, and a transition would make it lag the scroll
+   — which is also why will-change is here rather than left to the browser's
+   heuristic, since a bare style mutation isn't the signal that heuristic reads. */
 .js-pin .proj-rail {
   display: flex; position: relative; align-items: stretch; gap: 20px;
   transform: translateX(var(--rail-x, 0px));
+  will-change: transform;
 }
 /* Featured cards are simply wider. That flag already exists in content.js, so a
    new project inherits its size from something it has to set anyway — this is
@@ -446,10 +493,12 @@ a:hover { color: #ffb37a; }
 .js-pin .proj-pin-counter { font-size: 11px; letter-spacing: 0.1em; color: rgba(242,241,236,0.4); }
 
 /* SKILLS — one-shot: three groups roll in, chips staggering within each. ------
-   --g sequences the groups 180ms apart; --i staggers the chips inside one. The
+   --g sequences the groups 160ms apart; --i staggers the chips inside one. The
    group offsets are sequencing, not sibling stagger — the number the 500ms
    budget is about is the span within a single list, and the nine-item group is
-   the worst case at eight gaps × 32ms = 256ms. */
+   the worst case at eight gaps × 32ms = 256ms. The last chip on screen is the
+   sixth of the third group: 2 × 160 + 5 × 32 = 480ms, so even read as one span
+   the whole thing stays inside the budget. */
 @keyframes skillTitleIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 /* Chips register rather than arrive: each lights gold — fill and border together
    — then drains to rest. Deliberately no transform. A scale or a rise would make
@@ -466,11 +515,11 @@ a:hover { color: #ffb37a; }
    it the wrong reveal. */
 .js-pin #skills .pin-step[data-pin="active"] .skills-group-title {
   animation: skillTitleIn 300ms var(--ease-out-quart) both;
-  animation-delay: calc(var(--g, 0) * 180ms);
+  animation-delay: calc(var(--g, 0) * 160ms);
 }
 .js-pin #skills .pin-step[data-pin="active"] .skill-chip {
   animation: skillChipIn 420ms var(--ease-out-quart) both;
-  animation-delay: calc(var(--g, 0) * 180ms + var(--i, 0) * 32ms);
+  animation-delay: calc(var(--g, 0) * 160ms + var(--i, 0) * 32ms);
 }
 
 }
