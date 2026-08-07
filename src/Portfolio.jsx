@@ -1310,6 +1310,13 @@ export default class Portfolio extends React.Component {
                   {/* The rail persists across the whole track. It is a position
                       indicator, and the per-item dots below say the same thing,
                       so those are hidden while pinned rather than duplicated. */}
+                  <div className="exp-rail-logos" aria-hidden="true">
+                    {experience.map((job, i) => <React.Fragment key={job.id}>
+                      <div className="exp-rail-logo" data-pin={pExp.at(i)}>
+                        {job.logo ? <img src={job.logo} alt="" className="exp-rail-logo-img" /> : null}
+                      </div>
+                    </React.Fragment>)}
+                  </div>
                   <div className="exp-rail" aria-hidden="true">
                     {experience.map((job, i) => <React.Fragment key={job.id}>
                       <div className="exp-rail-dot" data-pin={pExp.at(i)} style={{ '--dot-color': job.dotColor }}></div>
@@ -1320,8 +1327,13 @@ export default class Portfolio extends React.Component {
                       <div id={`job-${job.id}`} className="timeline-item pin-step exp-step" data-pin={pExp.at(i)} inert={pExp.inert(i)}>
                         <div className="timeline-dot" style={{ background: job.dotColor }}></div>
                         <div className="timeline-range">{job.range}</div>
-                        <div className="timeline-role">{job.role}</div>
-                        <div className="timeline-org" style={{ color: job.dotColor }}>{job.org}</div>
+                        <div className="timeline-header">
+                          <div className="timeline-header-text">
+                            <div className="timeline-role">{job.role}</div>
+                            <div className="timeline-org" style={{ color: job.dotColor }}>{job.org}</div>
+                          </div>
+                          {job.logo ? <img src={job.logo} alt="" className="timeline-logo" /> : null}
+                        </div>
                         <div className="timeline-bullets">
                           {job.bullets.map((b, i) => <React.Fragment key={i}>
                             <div className="timeline-bullet">
