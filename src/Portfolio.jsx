@@ -1388,7 +1388,10 @@ export default class Portfolio extends React.Component {
             <div className="pin-stage" style={pEdu.stageStyle}>
               <div className="pin-inner">
                 <div className="section-kicker">SYS.03 // EDUCATION</div>
-                <h2 className="section-title">Education</h2>
+                <div className="section-title-row">
+                  <h2 className="section-title">Education</h2>
+                  {education.logo ? <img src={education.logo} alt="" className="edu-logo" /> : null}
+                </div>
                 <div className="pin-step" data-pin={pEdu.at(0)} inert={pEdu.inert(0)}>
                   <dl className="edu-readout">
                     {[

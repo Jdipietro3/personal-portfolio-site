@@ -136,6 +136,7 @@
     skillsBlurb: 'The tools I work in. Where each one was used is on the roles and projects above.',
 
     education: {
+      logo: './img/WPI-logo.svg',
       institution: 'Worcester Polytechnic Institute',
       degree: 'B.S. in Computer Science',
       focus: 'Artificial Intelligence & Machine Learning',

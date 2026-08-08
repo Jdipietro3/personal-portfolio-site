@@ -52,6 +52,9 @@ a:hover { color: #ffb37a; }
 .section-kicker { font-size: 12px; color: #f8d488; letter-spacing: 0.15em; margin-bottom: 14px; text-shadow: 0 0 6px rgba(248,212,136,0.6), 0 0 18px rgba(248,212,136,0.3); }
 .section-title { margin-top: 0; font-size: 28px; font-weight: 700; margin-bottom: 48px; }
 .section-title--tight { margin-bottom: 12px; }
+.section-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 48px; }
+.section-title-row .section-title { margin-bottom: 0; }
+.edu-logo { flex: none; width: 160px; height: auto; object-fit: contain; }
 .content-wrap { position: relative; z-index: 10; background: #08080a; }
 /* overflow-x:clip, not hidden. `hidden` on one axis silently computes the other
    to `auto`, which makes .page-root a scroll container — and position:sticky
