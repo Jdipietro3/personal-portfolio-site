@@ -623,7 +623,6 @@ a:hover { color: #ffb37a; }
   z-index: 300;
   pointer-events: none;
   background-image:
-    repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0px, rgba(0,0,0,0.35) 2px, rgba(0,0,0,0) 3px, rgba(0,0,0,0) 5px),
     radial-gradient(ellipse at center, rgba(0,0,0,0) 50%, rgba(0,0,0,0.45) 100%);
   background-blend-mode: multiply, normal;
   backdrop-filter: saturate(1.5) contrast(1.1);
