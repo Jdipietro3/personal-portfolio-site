@@ -29,7 +29,7 @@
     // stays a markup glyph and the words stay data.
     hero: {
       classLabel: 'computer_science',
-      track: 'systems + AI'
+      track: 'AI + ML'
     },
 
     about: {

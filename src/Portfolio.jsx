@@ -1669,6 +1669,10 @@ export default class Portfolio extends React.Component {
           </div>
         </> : null}
 
+        {/* CRT OVERLAY — see styles.css for why this is a sibling here, last in
+            the tree, rather than a wrapping ancestor with `filter`. */}
+        <div className="crt-overlay" aria-hidden="true"></div>
+
       </div>
     );
   }
