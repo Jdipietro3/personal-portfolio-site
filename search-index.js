@@ -175,11 +175,11 @@
       push({
         id: 'edu:degree', groupId: 'edu', kind: 'education', section: 'education', anchorId: 'education',
         title: edu.degree,
-        snippet: edu.degree + ' — ' + edu.institution + ', ' + edu.graduation + '. GPA ' + edu.gpa + '.',
+        snippet: edu.degree + ' — ' + edu.institution + ', ' + edu.graduation + '.',
         // The trailing synonyms are index-only vocabulary: they never display, they
         // exist so "where does he go to school" and "what college" reach this chunk.
         text: edu.degree + ' at ' + edu.institution + ', focus ' + edu.focus + '. Graduating ' + edu.graduation
-          + '. GPA ' + edu.gpa + '. Undergraduate student, university degree, school, college, major, studies.',
+          + '. Undergraduate student, university degree, school, college, major, studies.',
         weight: 1.0
       });
       // Its own chunk rather than a line appended to the degree text, so a query for
@@ -190,6 +190,16 @@
         title: 'Honors',
         snippet: edu.honors,
         text: 'Academic honors and awards: ' + edu.honors + '. Scholarship, honor roll, distinction.',
+        weight: 1.0
+      });
+      // Own chunk for the same reason honors gets one: a query for "grad school" or
+      // "master's degree" should surface a row that actually says so, not just the
+      // undergrad degree line.
+      push({
+        id: 'edu:masters', groupId: 'edu', kind: 'education', section: 'education', anchorId: 'education',
+        title: 'Graduate study',
+        snippet: edu.masters,
+        text: edu.masters + '. Continuing on to a master\'s degree, grad school, graduate school, BS/MS program.',
         weight: 1.0
       });
       push({

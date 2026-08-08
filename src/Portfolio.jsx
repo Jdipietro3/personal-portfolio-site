@@ -22,6 +22,59 @@ function isTypingTarget(t) {
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
 }
 
+// ---- pin engine ----------------------------------------------------------
+// A pinned section is a tall scroll *track* holding a position:sticky *stage*.
+// The stage holds still on screen while the scroll distance below it advances
+// the stage's contents, so elements arrive in place rather than sliding past.
+// Native scroll throughout — nothing hijacks the wheel, so keyboard, trackpad,
+// touch and scrollToSection all keep working unchanged.
+
+// Two pacing dials, because pinned sections do two different jobs.
+//
+// STEP_VH is scroll distance per step, for sections you advance through — one
+// job, then the next; one project, then the next. 42 puts a step at roughly one
+// trackpad flick.
+//
+// REVEAL_VH is how long a one-shot section holds after its reveal has played.
+// Those sections don't advance: arriving triggers the whole animation, and this
+// is the beat the stage stays put afterwards so it lands rather than flicking by.
+const STEP_VH = 42;
+const REVEAL_VH = 60;
+
+// Matches the breakpoint the neural strip already uses. Below it we don't pin at
+// all — sticky + full-viewport heights are unreliable against mobile browser
+// chrome, and a long pinned sequence is worse on a phone than a plain scroll.
+const PIN_MIN_WIDTH = 900;
+
+// A stage is one viewport tall and has to hold its section's tallest step.
+// Projects is the tallest — its kicker, title, rail and step dots run to
+// roughly 573px — and education, with its five-row readout plus coursework
+// grid, isn't far behind at roughly 435px. 680 leaves projects headroom on top
+// of its own height; below that a short window would overflow the stage and the
+// excess would be unreachable, since the track scroll advances steps rather
+// than panning the stage. A short window falls back to plain flow instead.
+const PIN_MIN_HEIGHT = 680;
+
+// What each pinned section does, and how much scroll it gets for it.
+//
+// A section with one step doesn't advance — it plays. Its single future→active
+// flip is the trigger, and everything inside sequences off that in CSS. A section
+// with several steps is one you move through, and only two sections earn that:
+// experience, whose three jobs cannot share a stage, and projects, whose rail
+// travels sideways as you go.
+//
+// Counts are data-driven so adding a job or a project lengthens that track
+// instead of silently overflowing its last step. Contact is deliberately absent:
+// it's where someone acts, and it should arrive normally with the footer reachable.
+const PIN_SPEC = {
+  about: { steps: 1, vh: REVEAL_VH },
+  experience: { steps: CONTENT.experience.length, vh: STEP_VH },
+  education: { steps: 1, vh: REVEAL_VH },
+  projects: { steps: CONTENT.projects.length, vh: STEP_VH },
+  skills: { steps: 1, vh: REVEAL_VH }
+};
+const PIN_IDS = Object.keys(PIN_SPEC);
+
 export default class Portfolio extends React.Component {
   constructor(props) {
     super(props);
@@ -38,7 +91,17 @@ export default class Portfolio extends React.Component {
       searchResults: [],
       searchSel: -1,
       searchMode: 'idle',  // idle | loading | embedding | ready | failed
-      searchProgress: 0    // 0..1, drives the fill on the mode chip
+      searchProgress: 0,   // 0..1, drives the fill on the mode chip
+      // Pinning is opt-in and starts off, so the very first paint is today's
+      // plain document with every step present. It only switches on once the
+      // engine has decided the viewport allows it and has measured the tracks.
+      pinned: false,
+      pins: null,          // { [id]: { p, step, sp } } once measured
+      // Gates about's typing on the real webfont. `1ch` is JetBrains Mono's
+      // advance width only once it has swapped in, and a swap mid-animation
+      // desyncs the caret from the text it's supposed to be sitting on. Fails
+      // open — see componentDidMount and .fonts-ready in styles.css.
+      fontsReady: false
     };
     // Search internals live off state: none of them should trigger a render, and
     // renderVals() runs on every scroll event.
@@ -49,24 +112,45 @@ export default class Portfolio extends React.Component {
     this._searchDebounce = null;
     this._queryVecCache = new Map();
     this._searchInputRef = React.createRef();
+    // The nav pill's active marker is positioned imperatively — see syncNavIndicator().
+    this._navPillRef = React.createRef();
+    this._navIndicatorRef = React.createRef();
     this._searchTriggerEl = null;
     this._flashTimer = null;
-    this._pendingScroll = null;
+    // afterScroll()'s one-shot: the listener it armed, and the timer that backs it.
+    this._scrollEndRun = null;
+    this._scrollEndTimer = null;
     this._isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform || '');
     this._time = 0;
     this._geom = null;
     this._mask = null;
     this._reduceMotion = typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    // Document-space top of each pinned track, measured on mount / resize / font
+    // load. Null means "not measured, don't pin" — every consumer treats that as
+    // plain flow, so a failed measurement degrades to today's site.
+    this._pinTops = null;
+    // remeasurePins() retries once on the next frame before giving up — see
+    // there. _pinRetried caps it at that one retry, and _pinRetryRaf is the
+    // handle componentWillUnmount cancels.
+    this._pinRetried = false;
+    this._pinRetryRaf = null;
+    // { edges: number[], viewW, gutter } for the projects rail — see measureRail().
+    this._rail = null;
   }
 
   componentDidMount() {
     this.onScroll = () => {
-      this.setState({ scrollY: window.scrollY, flow: this.computeFlow() });
-      this.updateActive();
+      // Both consumers want the same six numbers; measuring them once keeps the
+      // handler's layout reads to what they were before anchors existed.
+      const anchors = this.sectionAnchors();
+      this.setState({ scrollY: window.scrollY, flow: this.computeFlow(anchors), pins: this.computePins() });
+      this.updateActive(anchors);
     };
     this.onResize = () => {
-      this.setState({ winW: window.innerWidth, winH: window.innerHeight });
+      // pinAllowed() reads window.innerWidth/innerHeight directly, not state, so
+      // it is already looking at the new size when this runs.
+      this.setState({ winW: window.innerWidth, winH: window.innerHeight, pinned: this.pinAllowed() });
       this.sizeCanvas();
     };
     window.addEventListener('scroll', this.onScroll, { passive: true });
@@ -76,7 +160,11 @@ export default class Portfolio extends React.Component {
     this.onKeyDown = (e) => {
       if (e.key === 'Escape') {
         if (this.state.openProject != null) { this.closeProjectModal(); return; }
-        if (this.state.searchOpen) this.closeSearch();
+        if (this.state.searchOpen) { this.closeSearch(); return; }
+        // Nothing is open, but a project result may have a modal queued behind an
+        // in-flight scroll. Escape means "never mind" there too — without this it
+        // hits neither branch above and the modal still arrives on schedule.
+        this.cancelAfterScroll();
         return;
       }
       if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
@@ -92,9 +180,51 @@ export default class Portfolio extends React.Component {
       }
     };
     window.addEventListener('keydown', this.onKeyDown);
+    // Toggling the OS setting has to unpin live, not on next reload: a pinned
+    // stage is exactly the thing someone reaching for reduce-motion wants gone.
+    this.onMotionPrefChange = () => this._safeSetState({ pinned: this.pinAllowed() });
+    if (this._reduceMotion && this._reduceMotion.addEventListener) {
+      this._reduceMotion.addEventListener('change', this.onMotionPrefChange);
+    }
     this.sizeCanvas();
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.sizeCanvas());
+    // Web fonts change every section's height, which moves every track top. The
+    // canvas already re-derives its geometry here; the pin tops have to as well.
+    if (document.fonts && document.fonts.ready) {
+      // The pill's link widths are font-dependent, so the marker has to be
+      // re-measured once the real face lands — same reason as the canvas geometry.
+      document.fonts.ready.then(() => {
+        this.sizeCanvas();
+        this.remeasurePins();
+        this.syncNavIndicator(false);
+        this._safeSetState({ fontsReady: true });
+      });
+    } else {
+      // Nothing to gate on, so don't gate. The reveal may then play against
+      // fallback metrics, which is what it did before this existed — the one
+      // outcome that must never happen, a permanently untyped or blank status
+      // line, is the thing this branch rules out.
+      this.setState({ fontsReady: true });
+    }
     this.startLoop();
+    this.setState({ pinned: this.pinAllowed() });
+    this.syncNavIndicator(false);
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    // Only when something that moves the marker changed. prevState is why this
+    // is cheap — the old DCLogic shim only ever passed prevProps, so this had to
+    // wait for the React port.
+    if (prevState.active !== this.state.active) this.syncNavIndicator(true);
+    else if (prevState.winW !== this.state.winW) this.syncNavIndicator(false);
+
+    // Track tops are only valid for the layout that produced them. Re-measure
+    // when pinning turns on or off (which changes every track's height) and when
+    // the window resizes (which changes both heights and wrapping above them).
+    if (prevState.pinned !== this.state.pinned ||
+        prevState.winW !== this.state.winW ||
+        prevState.winH !== this.state.winH) {
+      this.remeasurePins();
+    }
   }
 
   componentWillUnmount() {
@@ -102,10 +232,15 @@ export default class Portfolio extends React.Component {
     window.removeEventListener('scroll', this.onScroll);
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
+    if (this._reduceMotion && this._reduceMotion.removeEventListener) {
+      this._reduceMotion.removeEventListener('change', this.onMotionPrefChange);
+    }
     document.body.style.overflow = this._prevOverflow || '';
     if (this._raf) cancelAnimationFrame(this._raf);
+    if (this._pinRetryRaf) cancelAnimationFrame(this._pinRetryRaf);
     clearTimeout(this._searchDebounce);
     clearTimeout(this._flashTimer);
+    this.cancelAfterScroll();
   }
 
   // The model load and query embedding are async and can outlive the component.
@@ -128,12 +263,257 @@ export default class Portfolio extends React.Component {
     this._mask = HeroGrid.buildMask(NAME_ASCII.split('\n'), this._geom);
   }
 
-  computeFlow() {
-    const ids = SECTION_IDS;
-    const anchors = ids.map((id) => {
+  // Moves the nav pill's gold marker under the active section link. Written
+  // straight to the node rather than routed through state, for the same reason
+  // flashTarget() is: this component re-renders on every scroll event, and
+  // pushing one animated transform through that is a whole-page render to move a
+  // 60px box. Reading offsetLeft/offsetWidth here is a layout read, but it only
+  // happens when the active section or the window width actually changed.
+  syncNavIndicator(animate) {
+    const pill = this._navPillRef.current;
+    const bar = this._navIndicatorRef.current;
+    if (!pill || !bar) return;
+    const items = pill.querySelectorAll('[data-nav-item]');
+    const i = Math.max(0, SECTION_IDS.indexOf(this.state.active));
+    const a = items[i];
+    if (!a) return;
+    // .nav-pill is position:fixed, so it is the offsetParent and these are
+    // already pill-relative — no getBoundingClientRect arithmetic needed.
+    bar.style.transition = animate ? '' : 'none';
+    bar.style.width = a.offsetWidth + 'px';
+    bar.style.height = a.offsetHeight + 'px';
+    bar.style.transform = 'translate(' + a.offsetLeft + 'px, ' + a.offsetTop + 'px)';
+    if (!animate) {
+      // Flush the un-transitioned placement before re-arming, or the browser
+      // coalesces both writes and the marker slides in from the origin on load.
+      void bar.offsetWidth;
+      bar.style.transition = '';
+    }
+  }
+
+  // ---- pin engine ---------------------------------------------------------
+
+  pinAllowed() {
+    if (typeof window === 'undefined') return false;
+    if (window.innerWidth < PIN_MIN_WIDTH) return false;
+    if (window.innerHeight < PIN_MIN_HEIGHT) return false;
+    if (this._reduceMotion && this._reduceMotion.matches) return false;
+    return true;
+  }
+
+  // Height of a track in px: one viewport for the stage itself, plus that
+  // section's per-step distance for each step it has.
+  pinTrackHeight(id) {
+    const spec = PIN_SPEC[id];
+    return this.state.winH * (100 + spec.steps * spec.vh) / 100;
+  }
+
+  // Where each project card sits along the rail, measured once per layout rather
+  // than per frame. Card widths differ — featured cards are wider — so aligning
+  // one cannot be CSS arithmetic; it needs the real numbers. Same cache-then-do-
+  // arithmetic shape as _pinTops, so the scroll handler still reads no layout.
+  measureRail() {
+    const rail = document.querySelector('#projects .proj-rail');
+    if (!rail) { this._rail = null; return false; }
+    const cards = rail.querySelectorAll(':scope > .proj-card');
+    // A count mismatch means the rail isn't laid out the way the engine thinks it
+    // is, and aligning against it would put cards anywhere. Treat it as a failure.
+    if (cards.length !== PIN_SPEC.projects.steps) { this._rail = null; return false; }
+    const edges = [];
+    // .proj-rail is position:relative while pinned, so it is the offsetParent and
+    // these are rail-relative without any rect arithmetic.
+    cards.forEach((c) => edges.push(c.offsetLeft));
+    const viewport = rail.parentElement;
+    if (!viewport) { this._rail = null; return false; }
+    // The emphasised card lands on the same left margin the kicker and title
+    // already sit on. .js-pin #projects .section-title is the source of truth for
+    // that column (max-width: 1100px; margin: 0 auto; padding: 0 24px) — read its
+    // left content edge rather than re-deriving the column math in JS, which
+    // would duplicate the CSS rule and drift the moment the column changes.
+    const title = document.querySelector('.js-pin #projects .section-title');
+    if (!title) { this._rail = null; return false; }
+    const titleRect = title.getBoundingClientRect();
+    const titlePadLeft = parseFloat(window.getComputedStyle(title).paddingLeft) || 0;
+    const viewportRect = viewport.getBoundingClientRect();
+    const gutter = titleRect.left + titlePadLeft - viewportRect.left;
+    this._rail = { edges, viewW: viewport.clientWidth, gutter };
+    return true;
+  }
+
+  // Puts card `i` in the emphasised slot on the rail by scrolling the page to
+  // that card's point along the projects track. Focus and the rail must never
+  // disagree: a card that has keyboard focus but sits off the side of the stage
+  // is a card nobody can see they are on.
+  scrollRailTo(i) {
+    if (!this.state.pinned || !this._pinTops) return;
+    this.cancelAfterScroll();   // same supersede rule as scrollToSection
+    const steps = PIN_SPEC.projects.steps;
+    if (steps < 2) return;
+    const p = Math.max(0, Math.min(1, i / (steps - 1)));
+    const span = Math.max(1, this.pinTrackHeight('projects') - window.innerHeight);
+    window.scrollTo({ top: Math.round(this._pinTops.projects + span * p), behavior: 'auto' });
+  }
+
+  // Horizontal offset that puts the current point along the rail on the left
+  // gutter — the same margin the kicker and title sit on. Interpolating between
+  // neighbouring card left edges rather than snapping to one is what makes the
+  // rail travel continuously while each card still lands on the gutter exactly
+  // at its own step.
+  computeRail(p) {
+    const rail = this._rail;
+    if (!rail || p == null) return null;
+    const e = rail.edges;
+    if (e.length === 0) return null;
+    if (e.length === 1) return rail.gutter - e[0];
+    const pos = p * (e.length - 1);
+    const i = Math.min(e.length - 2, Math.floor(pos));
+    const t = pos - i;
+    return rail.gutter - (e[i] + (e[i + 1] - e[i]) * t);
+  }
+
+  // The only layout read the pin engine ever does, and it happens on mount,
+  // resize, and font load — never per scroll. Everything after this is
+  // arithmetic on scrollY, so the scroll handler gains no forced reflows.
+  remeasurePins() {
+    if (!this.state.pinned) {
+      this._pinTops = null;
+      this._pinRetried = false;
+      if (this.state.pins) this._safeSetState({ pins: null });
+      return;
+    }
+    const tops = {};
+    for (const id of PIN_IDS) {
       const el = document.getElementById(id);
-      return el ? el.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.4 : null;
+      // All-or-nothing, and it turns pinning off rather than just clearing the
+      // progress. Clearing alone would leave the tracks tall and the stages
+      // sticky while every step reported 'active' — which in the two swapping
+      // sections means all three jobs, or all five project cards, rendered on
+      // top of each other. Unpinning is the same exit the too-narrow and
+      // reduce-motion paths take, and it lands on the plain document.
+      //
+      // A miss on the first pass is usually layout not having settled yet, not a
+      // real failure, so one retry is queued for the next frame before giving
+      // up. _pinRetried caps it at one: if the retry hits the same wall, this
+      // unpins permanently exactly as it did before.
+      if (!el) {
+        if (this.retryPins()) return;
+        this._pinTops = null;
+        this._safeSetState({ pinned: false, pins: null });
+        return;
+      }
+      tops[id] = el.getBoundingClientRect().top + window.scrollY;
+    }
+    this._pinTops = tops;
+    // The rail is measured under the same all-or-nothing rule, and gets the same
+    // one-frame retry. A rail that can't be measured would sit at offset zero
+    // with its first card jammed against the left edge and no way to reach the
+    // rest — worse than not pinning.
+    if (!this.measureRail()) {
+      if (this.retryPins()) return;
+      this._pinTops = null;
+      this._safeSetState({ pinned: false, pins: null });
+      return;
+    }
+    this._pinRetried = false;
+    this._safeSetState({ pins: this.computePins() });
+  }
+
+  // Queues remeasurePins() for the next frame, once. Returns whether it queued —
+  // false means the retry has already been spent and the caller should take its
+  // permanent failure path.
+  retryPins() {
+    if (this._pinRetried) return false;
+    this._pinRetried = true;
+    this._pinRetryRaf = requestAnimationFrame(() => {
+      this._pinRetryRaf = null;
+      if (this._alive) this.remeasurePins();
     });
+    return true;
+  }
+
+  // Per-track progress and step index. `p` is 0..1 across the whole track, `step`
+  // is the index currently on stage, and `sp` is 0..1 within that step for
+  // effects that need to be continuous rather than discrete.
+  //
+  // `step` is -1 before the track has been reached, which is what makes the
+  // first step's entrance play at all: progress clamps at 0, so without this
+  // every section's step 0 would already be on stage from page load and would
+  // simply be *there* when you arrived rather than arriving.
+  computePins() {
+    const tops = this._pinTops;
+    if (!tops) return null;
+    const y = window.scrollY, vh = window.innerHeight;
+    const out = {};
+    for (const id of PIN_IDS) {
+      const steps = PIN_SPEC[id].steps;
+      // The stage is stuck from the track's top until its bottom reaches the
+      // viewport bottom; that window is the whole span of travel.
+      const span = Math.max(1, this.pinTrackHeight(id) - vh);
+      const p = Math.max(0, Math.min(1, (y - tops[id]) / span));
+      // Step 0 arrives while the stage is still rising into view rather than at
+      // the instant it locks, so the visitor doesn't watch an empty stage climb
+      // a whole viewport first. 0.6 puts it a little past halfway up.
+      const entered = y > tops[id] - vh * 0.6;
+      const raw = p * steps;
+      // At p === 1 the floor would land one past the end. Hold the last step
+      // instead, with sp saturated, so the final frame doesn't snap backwards.
+      const step = !entered ? -1 : raw >= steps ? steps - 1 : Math.floor(raw);
+      out[id] = { p, step, sp: raw >= steps ? 1 : raw - step };
+    }
+    // Projects rides its track sideways rather than swapping, so it carries one
+    // extra number: how far along the rail we are, in px.
+    out.projects.railX = out.projects.step < 0 ? this.computeRail(0) : this.computeRail(out.projects.p);
+    return out;
+  }
+
+  // ---- where a section lives ----------------------------------------------
+  // One answer to "what scrollY puts this section, at this step, on stage",
+  // shared by nav clicks, the scroll-spy, the neural strip and search jumps.
+  // Those four used to each compute their own, which is exactly why they
+  // disagreed: a pinned section is a multi-viewport track whose stage locks at
+  // its top, not a box you're 40% of a viewport away from.
+  //
+  // `max` is the bottom of the scroll range, passed in by sectionAnchors() so a
+  // six-section pass reads scrollHeight once instead of six times.
+  sectionAnchor(id, step = 0, max) {
+    if (typeof window === 'undefined') return null;
+    if (max == null) max = this.scrollMax();
+    // Pinned: the track top is the frame the stage locks, and each further step
+    // sits at its own fraction of the travel. A one-step section has no
+    // interior, so every step resolves to the top.
+    if (this.state.pinned && this._pinTops && PIN_SPEC[id]) {
+      const steps = PIN_SPEC[id].steps;
+      const span = Math.max(1, this.pinTrackHeight(id) - window.innerHeight);
+      const t = steps > 1 ? Math.max(0, Math.min(1, step / (steps - 1))) : 0;
+      return Math.min(max, Math.round(this._pinTops[id] + span * t));
+    }
+    // Unpinned — contact, everything below the breakpoint, and everything under
+    // reduce-motion. Centre the element in the viewport. The clamp matters: a
+    // final section between one and two viewports tall has a centre position
+    // past the end of the scroll range, and an anchor nobody can scroll to is a
+    // section the spy can never mark active.
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const y = r.top + window.scrollY + r.height / 2 - window.innerHeight / 2;
+    return Math.max(0, Math.min(max, Math.round(y)));
+  }
+
+  scrollMax() {
+    return Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  }
+
+  // The six section anchors in order, measured once per scroll and handed to
+  // both consumers rather than each recomputing them. While pinned this is one
+  // layout read for the whole pass — five sections come from cached track tops,
+  // and only contact, which has no track, still measures.
+  sectionAnchors() {
+    const max = this.scrollMax();
+    return SECTION_IDS.map((id) => this.sectionAnchor(id, 0, max));
+  }
+
+  computeFlow(anchors) {
+    if (!anchors) anchors = this.sectionAnchors();
     if (anchors.some((a) => a === null)) return this.state.flow || 0;
     const y = window.scrollY;
     if (y <= anchors[0]) return 0;
@@ -146,23 +526,18 @@ export default class Portfolio extends React.Component {
     return anchors.length - 1;
   }
 
-  updateActive() {
-    const ids = SECTION_IDS;
-    // A short final section never gets its top above the 40% line, so the loop below
-    // can't ever pick it: at max scroll contact.top is (innerHeight - its height), which
-    // only clears 0.4*innerHeight on windows under ~820px tall. Being at the end of the
-    // page means you're in the last section, wherever its top sits. The tolerance is so
-    // this engages over the final stretch of scroll rather than snapping in the last pixel.
-    const doc = document.documentElement;
-    if (window.innerHeight + window.scrollY >= doc.scrollHeight - 130) {
-      const last = ids[ids.length - 1];
-      if (last !== this.state.active) this.setState({ active: last });
-      return;
-    }
+  // The last section whose anchor we've reached. The end-of-page special case
+  // this used to need is gone with it: it existed only because a short final
+  // section could never get its top above the 40% line, and an anchor is
+  // reachable by construction — sectionAnchor() clamps it into the scroll range.
+  updateActive(anchors) {
+    if (!anchors) anchors = this.sectionAnchors();
+    const y = window.scrollY;
     let current = this.state.active;
-    for (const id of ids) {
-      const el = document.getElementById(id);
-      if (el && el.getBoundingClientRect().top < window.innerHeight * 0.4) current = id;
+    for (let i = 0; i < SECTION_IDS.length; i++) {
+      // A few px of slack so the final section, whose anchor can sit exactly at
+      // max scroll, still registers rather than depending on the last pixel.
+      if (anchors[i] != null && y + 8 >= anchors[i]) current = SECTION_IDS[i];
     }
     if (current !== this.state.active) this.setState({ active: current });
   }
@@ -183,22 +558,41 @@ export default class Portfolio extends React.Component {
     this.setState({ openProject: null });
     // send focus back to whatever card opened the dialog
     if (this._prevFocus && this._prevFocus.focus) this._prevFocus.focus();
-    // A search result that opened this dialog deferred its scroll until now, because
-    // scrolling under an open modal is both invisible and cancelled by overflow:hidden.
-    const pending = this._pendingScroll;
-    this._pendingScroll = null;
-    if (pending) {
-      this.scrollToSection(pending);
-      this.flashTarget(pending);
-    }
   }
 
-  scrollToSection(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const y = el.getBoundingClientRect().top + window.scrollY - 90;
+  // Returns the scroll target it aimed at, so a caller that needs to act once the
+  // page has arrived can tell whether it was already there.
+  scrollToSection(id, step = 0) {
+    // Any new scroll supersedes a pending one. Without this, clicking a nav link
+    // while a search-driven project scroll is still travelling leaves that scroll's
+    // one-shot armed: the *nav* scroll's scrollend then fires it, yanking the page
+    // back to projects and opening a modal seconds after you navigated away.
+    this.cancelAfterScroll();
+    const y = this.sectionAnchor(id, step);
+    if (y == null) return null;
     const smooth = !(this._reduceMotion && this._reduceMotion.matches);
     window.scrollTo({ top: y, behavior: smooth ? 'smooth' : 'auto' });
+    return y;
+  }
+
+  // Runs fn once the current scroll settles. `scrollend` is the early exit, not
+  // the guarantee: Safari before 18 doesn't have it at all, and an instant jump
+  // may never fire one. The timer is what actually guarantees fn runs, and both
+  // paths go through the same one-shot so a late event can't run it twice.
+  afterScroll(fn) {
+    this.cancelAfterScroll();
+    const run = () => { this.cancelAfterScroll(); fn(); };
+    this._scrollEndRun = run;
+    window.addEventListener('scrollend', run);
+    this._scrollEndTimer = setTimeout(run, 700);
+  }
+
+  cancelAfterScroll() {
+    if (this._scrollEndRun) {
+      window.removeEventListener('scrollend', this._scrollEndRun);
+      this._scrollEndRun = null;
+    }
+    clearTimeout(this._scrollEndTimer);
   }
 
   // ---- search -------------------------------------------------------------
@@ -208,6 +602,10 @@ export default class Portfolio extends React.Component {
   // it eventually leaves the page permanently unscrollable.
   openSearch(triggerEl) {
     if (this.state.searchOpen) return;
+    // Reaching for search again abandons whatever the last result queued —
+    // otherwise a project modal from the previous search pops open on top of the
+    // palette you just opened.
+    this.cancelAfterScroll();
     this._searchTriggerEl = triggerEl && triggerEl.focus ? triggerEl : null;
     if (!this._searchIndex) {
       this._searchIndex = SearchIndex.buildIndex(SearchIndex.buildChunks(CONTENT));
@@ -339,18 +737,62 @@ export default class Portfolio extends React.Component {
     this.setState({ searchSel: next });
   }
 
+  // Which step inside its section a result lives at. Nothing new goes in the
+  // index for this — role chunks already carry 'job-<id>' and project chunks
+  // already carry the project key. Everything else is a one-shot section where
+  // step 0 is the only answer.
+  resultStep(r) {
+    if (!r) return 0;
+    if (r.openProject) {
+      const i = CONTENT.projects.findIndex((p) => p.key === r.openProject);
+      return i < 0 ? 0 : i;
+    }
+    if (r.anchorId && r.anchorId.indexOf('job-') === 0) {
+      const id = r.anchorId.slice(4);
+      const i = CONTENT.experience.findIndex((j) => j.id === id);
+      return i < 0 ? 0 : i;
+    }
+    return 0;
+  }
+
   activateResult(r) {
     if (!r) return;
     // Close first: it restores focus to the trigger, so openProjectModal's
     // _prevFocus capture grabs that rather than <body>.
     this.closeSearch();
+    const step = this.resultStep(r);
     if (r.openProject) {
-      // Don't also scroll — openProjectModal sets overflow:hidden, which kills an
-      // in-flight smooth scroll. Hand it to closeProjectModal instead.
-      this._pendingScroll = r.anchorId;
-      this.openProjectModal(r.openProject);
+      // Scroll first, open second. The rail's travel *is* the horizontal scroll
+      // to that card, so a single vertical scroll to the project's step visibly
+      // carries the rail to it — and the dialog then opens over the right card
+      // instead of covering the journey to it.
+      const y = this.scrollToSection('projects', step);
+      const open = () => {
+        // The 700ms fallback can fire while a slow smooth scroll is still in
+        // flight, and openProjectModal's overflow:hidden would then cancel it
+        // and strand the page short of the card. Snapping first costs nothing
+        // when the scroll did finish, and is the difference between right and
+        // wrong when it didn't.
+        if (y != null && Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: y, behavior: 'auto' });
+        this.flashTarget('projects');
+        // Put focus on the card we actually landed on before the dialog captures
+        // _prevFocus. Otherwise focus is still wherever search was opened from —
+        // and if that was a *different* rail card, closing the dialog focuses it,
+        // its onFocus fires scrollRailTo, and the rail slides away from the
+        // project you were just reading. preventScroll because the page is
+        // already exactly where it should be.
+        const card = document.querySelectorAll('#projects .proj-card')[step];
+        if (card && card.focus) card.focus({ preventScroll: true });
+        this.openProjectModal(r.openProject);
+      };
+      // Already there — searching a project while standing on it — means no
+      // scroll will happen and no scrollend will ever come.
+      if (y == null || Math.abs(window.scrollY - y) < 2) open();
+      else this.afterScroll(open);
     } else {
-      this.scrollToSection(r.anchorId);
+      // r.section is the pinned track; r.anchorId may be a job panel inside it,
+      // which is what the flash should land on.
+      this.scrollToSection(r.section || r.anchorId, step);
       this.flashTarget(r.anchorId);
     }
   }
@@ -361,8 +803,12 @@ export default class Portfolio extends React.Component {
   // animate one box-shadow.
   flashTarget(id) {
     if (this._reduceMotion && this._reduceMotion.matches) return;
-    const el = document.getElementById(id);
-    if (!el) return;
+    const section = document.getElementById(id);
+    if (!section) return;
+    // A pinned track is several viewports tall, so flashing the section itself
+    // would tint a box mostly off screen. The stage is what the visitor is
+    // actually looking at when they land.
+    const el = section.querySelector(':scope > .pin-stage') || section;
     clearTimeout(this._flashTimer);
     el.classList.remove('flash-target');
     void el.offsetWidth;               // force reflow so a repeat flash restarts
@@ -466,14 +912,73 @@ export default class Portfolio extends React.Component {
     // spacer covers phase A only — the content then scrolls in *during* the name's dock
     const heroSpacerStyle = { position: 'relative', height: (this.state.winH + phaseAPx) + 'px', width: '100%' };
 
+    // --- pin engine render contract ---
+    // pin(id) hands each pinned section everything it needs and nothing else:
+    // the track height, the custom properties the stage exposes, and a per-step
+    // state. When pinning is off — narrow viewport, reduce-motion, or a failed
+    // measurement — every step reports 'active', which is the finished state, so
+    // the section renders as today's plain document with all of it visible.
+    const pinned = this.state.pinned;
+    const pinData = this.state.pins;
+    // `mode` is 'accumulate' (past steps stay on stage) or 'swap' (only the
+    // active step is on stage). It exists purely so inert() knows whether a past
+    // step is still visible: in a swap section it is not, and something nobody
+    // can see must not be clickable or reachable by Tab — the project cards are
+    // role=button and tabIndex=0, so this is a real leak, not a theoretical one.
+    const pin = (id, mode) => {
+      const d = pinned && pinData ? pinData[id] : null;
+      const swap = mode === 'swap';
+      return {
+        steps: PIN_SPEC[id].steps,
+        trackStyle: pinned ? { height: Math.round(this.pinTrackHeight(id)) + 'px' } : null,
+        stageStyle: d ? { '--pin-progress': d.p.toFixed(4), '--step-progress': d.sp.toFixed(4) } : null,
+        // 'past' — already arrived and still standing. 'active' — on stage now.
+        // 'future' — not yet reached, including everything before the track has
+        // been entered at all (step -1).
+        at: (i) => (!d ? 'active' : i < d.step ? 'past' : i === d.step ? 'active' : 'future'),
+        inert: (i) => (d && (swap ? i !== d.step : i > d.step) ? '' : undefined)
+      };
+    };
+    const pAbout = pin('about', 'accumulate');
+    const pExp = pin('experience', 'swap');
+    const pEdu = pin('education', 'accumulate');
+    // 'accumulate', not 'swap': every card stays visible on the rail, so none of
+    // them may be inert. That is also what restores the Tab route through all of
+    // them, which one-card-per-stage had narrowed to whichever card was on screen.
+    const pProj = pin('projects', 'accumulate');
+    const pSkills = pin('skills', 'accumulate');
+    // The rail's own offset. Null whenever pinning is off, which leaves the plain
+    // grid in charge rather than a transform on a non-existent rail.
+    const railData = pinned && pinData ? pinData.projects : null;
+    // Both custom properties live on .proj-rail-viewport, not .proj-rail. The edge
+    // fades are the viewport's own ::before/::after pseudo-elements, and custom
+    // properties only inherit downward — a var written on .proj-rail (the
+    // viewport's child) can never reach its parent's pseudo-elements. .proj-rail
+    // picks up --rail-x by inheritance instead of setting it itself.
+    const railStyle = railData && railData.railX != null
+      ? {
+          '--rail-x': railData.railX.toFixed(1) + 'px',
+          '--rail-gutter': (this._rail && this._rail.gutter != null ? this._rail.gutter.toFixed(1) + 'px' : '9%')
+        }
+      : null;
+    // Which card is in the emphasised slot on the gutter. Two values, because two
+    // consumers want different answers before the track has been entered: the
+    // rail already sits with card 0 on the gutter by then, so *emphasis* clamps
+    // to 0 rather than dimming a card that is plainly the one you're looking at —
+    // while the counter keeps the -1 so its 00 stays honest about not having
+    // arrived.
+    const railCounter = railData && railData.step >= 0
+      ? Math.round(railData.p * (PIN_SPEC.projects.steps - 1)) : -1;
+    const railFocus = Math.max(0, railCounter);
+
     const ids = SECTION_IDS;
     const navItems = CONTENT.sections.map((s) => ({
       id: s.id,
       href: '#' + s.id,
       label: s.label,
       active: this.state.active === s.id,
+      // The gold background is the sliding .nav-indicator now, not a per-item fill.
       color: this.state.active === s.id ? '#08080a' : 'rgba(242,241,236,0.65)',
-      bg: this.state.active === s.id ? '#f8d488' : 'transparent',
       onClick: (e) => { e.preventDefault(); this.scrollToSection(s.id); }
     }));
 
@@ -508,12 +1013,14 @@ export default class Portfolio extends React.Component {
       return v;
     });
 
-    const featuredProjects = projects.filter((p) => p.featured);
-    const gridProjects = projects.filter((p) => !p.featured);
+    // Reads 01..NN once a card is on the gutter and 00 before the track is
+    // entered, which is the honest answer rather than pretending the first one
+    // is up.
+    const projCounter = String(railCounter + 1).padStart(2, '0');
 
     const openProj = this.state.openProject != null ? projects.find((p) => p.key === this.state.openProject) : null;
     const modal = openProj ? {
-      name: openProj.name, longDesc: openProj.longDesc, highlights: openProj.highlights, tags: openProj.tags,
+      name: openProj.name, desc: openProj.desc, longDesc: openProj.longDesc, highlights: openProj.highlights, tags: openProj.tags,
       link: openProj.link, image: openProj.image, imageAlt: openProj.imageAlt, year: openProj.year,
       dotColor: openProj.dotColor, hasImage: openProj.hasImage,
       close: () => this.closeProjectModal(),
@@ -527,6 +1034,7 @@ export default class Portfolio extends React.Component {
     const education = CONTENT.education;
     const about = CONTENT.about;
     const contact = CONTENT.contact;
+    const hero = CONTENT.hero;
 
     // --- search ---
     // Everything below is pure formatting. The {{ }} evaluator has no arithmetic,
@@ -698,8 +1206,14 @@ export default class Portfolio extends React.Component {
       display: this.state.winW < 900 ? 'none' : 'block'
     };
 
+    // One place decides what rides on the root class. .fonts-ready only means
+    // anything alongside .js-pin, but it is written unconditionally rather than
+    // nested, so the two flags stay independent of each other.
+    const rootClass = 'page-root' + (pinned ? ' js-pin' : '') +
+      (this.state.fontsReady ? ' fonts-ready' : '');
+
     return (
-      <div className="page-root">
+      <div className={rootClass}>
 
         <canvas ref={this.canvasRef} className="bg-canvas"></canvas>
 
@@ -711,7 +1225,7 @@ export default class Portfolio extends React.Component {
 
         <div style={subStyle}>
           <div className="hero-stack">
-            <div className="hero-badge">&gt;&gt; class: computer_science <span className="text-gold">//</span> track: systems + AI</div>
+            <div className="hero-badge">&gt;&gt; class: {hero.classLabel} <span className="text-gold">//</span> track: {hero.track}</div>
 
             <button className="search-trigger search-trigger-hero" onClick={openSearchFromHero} aria-label="Search this site" aria-keyshortcuts="Control+K Meta+K" style={heroSearchStyle}>
               <span aria-hidden="true" className="hero-search-chevron">&gt;</span>
@@ -743,9 +1257,14 @@ export default class Portfolio extends React.Component {
         </div>
 
         {/* FLOATING NAV PILL */}
-        <div className="nav-pill" style={navPillStyle}>
+        <div className="nav-pill" style={navPillStyle} ref={this._navPillRef}>
+          {/* One marker that slides between the six section links, rather than six
+              backgrounds flipping on and off. Positioned by syncNavIndicator();
+              it carries no text, so it is decoration to assistive tech. Sized to
+              zero until the first measurement so it never flashes at full width. */}
+          <span className="nav-indicator" aria-hidden="true" ref={this._navIndicatorRef}></span>
           {navItems.map((item, i) => <React.Fragment key={i}>
-            <a href={item.href} onClick={item.onClick} className="nav-pill-item" style={{ color: item.color, background: item.bg }}>{item.label}</a>
+            <a href={item.href} onClick={item.onClick} data-nav-item className="nav-pill-item" style={{ color: item.color }}>{item.label}</a>
           </React.Fragment>)}
           <button className="search-trigger nav-search-trigger" onClick={openSearchFromNav} aria-label="Search this site" aria-keyshortcuts="Control+K Meta+K">
             <span aria-hidden="true" className="chevron-gold">&gt;</span>
@@ -764,96 +1283,181 @@ export default class Portfolio extends React.Component {
 
         <div className="content-wrap">
 
-          {/* ABOUT */}
-          <section id="about" className="section section--about">
-            <div className="section-kicker">SYS.01 // IDENTITY</div>
-            <h2 className="sr-only">About</h2>
-            <div className="panel">
-              <div className="panel-titlebar">
-                <div className="titlebar-dot"></div>
-                <div className="titlebar-dot"></div>
-                <div className="titlebar-dot"></div>
-                <div className="titlebar-label">identity.log</div>
-              </div>
-              <div className="about-body">
-                <div className="text-cream">{about.headline}</div>
-                {about.paragraphs.map((para, i) => <React.Fragment key={i}>
-                  <p className="about-para">{para}</p>
-                </React.Fragment>)}
-                <p className="about-status">{about.status}<span className="blink-cursor">_</span></p>
+          {/* ABOUT — accumulate: the console opens, then it logs a line. */}
+          <section id="about" className="section section--about pin-track" style={pAbout.trackStyle}>
+            <div className="pin-stage" style={pAbout.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.01 // IDENTITY</div>
+                <h2 className="sr-only">About</h2>
+                <div className="panel">
+                  <div className="pin-step about-step-titlebar" data-pin={pAbout.at(0)} inert={pAbout.inert(0)}>
+                    <div className="panel-titlebar">
+                      <div className="titlebar-dot"></div>
+                      <div className="titlebar-dot"></div>
+                      <div className="titlebar-dot"></div>
+                      <div className="titlebar-label">identity.log</div>
+                    </div>
+                  </div>
+                  <div className="about-body">
+                    <div className="pin-step about-step-body" data-pin={pAbout.at(0)} inert={pAbout.inert(0)}>
+                      <div className="text-cream">{about.headline}</div>
+                      {about.paragraphs.map((para, i) => <React.Fragment key={i}>
+                        <p className="about-para">{para}</p>
+                      </React.Fragment>)}
+                    </div>
+                    <div className="pin-step about-step-status" data-pin={pAbout.at(0)} inert={pAbout.inert(0)}>
+                      {/* The status is a log line, so it types out — on arrival,
+                          as the third beat of one sequence, rather than scrubbed
+                          against how far you have scrolled. */}
+                      <p className="about-status">
+                        <span className="about-status-wrap" style={{ '--about-status-len': String(about.status.length) }}>
+                          <span className="about-status-type">{about.status}</span>
+                          <span className="blink-cursor about-status-cursor">_</span>
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
-          {/* EXPERIENCE */}
-          <section id="experience" className="section">
-            <div className="section-kicker">SYS.02 // EXPERIENCE</div>
-            <h2 className="section-title">Work Experience</h2>
-            <div className="timeline">
-              {experience.map((job, i) => <React.Fragment key={i}>
-                <div id={`job-${job.id}`} className="timeline-item">
-                  <div className="timeline-dot" style={{ background: job.dotColor }}></div>
-                  <div className="timeline-range">{job.range}</div>
-                  <div className="timeline-role">{job.role}</div>
-                  <div className="timeline-org" style={{ color: job.dotColor }}>{job.org}</div>
-                  <div className="timeline-bullets">
-                    {job.bullets.map((b, i) => <React.Fragment key={i}>
-                      <div className="timeline-bullet">
-                        <span className="bullet-marker">›</span>{b}
+          {/* EXPERIENCE — swap: one job on stage, the rail beside it showing
+              where you are. The three jobs total more than a viewport, so they
+              cannot coexist on a pinned stage; swapping is what makes it work. */}
+          <section id="experience" className="section pin-track" style={pExp.trackStyle}>
+            <div className="pin-stage" style={pExp.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.02 // EXPERIENCE</div>
+                <h2 className="section-title">Work Experience</h2>
+                <div className="timeline exp-timeline">
+                  {/* The rail persists across the whole track. It is a position
+                      indicator, and the per-item dots below say the same thing,
+                      so those are hidden while pinned rather than duplicated. */}
+                  <div className="exp-rail-logos" aria-hidden="true">
+                    {experience.map((job, i) => <React.Fragment key={job.id}>
+                      <div className="exp-rail-logo" data-pin={pExp.at(i)}>
+                        {job.side_logo ? <img src={job.side_logo} alt="" className="exp-rail-logo-img" /> : null}
                       </div>
                     </React.Fragment>)}
                   </div>
-                  <div className="tag-row">
-                    {job.tags.map((tag, i) => <React.Fragment key={i}>
-                      <span className="tag">{tag}</span>
+                  <div className="exp-rail" aria-hidden="true">
+                    {experience.map((job, i) => <React.Fragment key={job.id}>
+                      <div className="exp-rail-dot" data-pin={pExp.at(i)} style={{ '--dot-color': job.dotColor }}></div>
+                    </React.Fragment>)}
+                  </div>
+                  <div className="exp-stack">
+                    {experience.map((job, i) => <React.Fragment key={i}>
+                      <div id={`job-${job.id}`} className="timeline-item pin-step exp-step" data-pin={pExp.at(i)} inert={pExp.inert(i)}>
+                        <div className="timeline-dot" style={{ background: job.dotColor }}></div>
+                        <div className="timeline-range">{job.range}</div>
+                        <div className="timeline-header">
+                          <div className="timeline-role-row">
+                            <div className="timeline-role">{job.role}</div>
+                            {job.logo ? <img src={job.logo} alt="" className="timeline-logo" /> : null}
+                          </div>
+                          <div className="timeline-org" style={{ color: job.dotColor }}>{job.org}</div>
+                        </div>
+                        <div className="timeline-bullets">
+                          {job.bullets.map((b, i) => <React.Fragment key={i}>
+                            <div className="timeline-bullet">
+                              <span className="bullet-marker">›</span>{b}
+                            </div>
+                          </React.Fragment>)}
+                        </div>
+                        <div className="tag-row">
+                          {job.tags.map((tag, i) => <React.Fragment key={i}>
+                            <span className="tag">{tag}</span>
+                          </React.Fragment>)}
+                        </div>
+                      </div>
                     </React.Fragment>)}
                   </div>
                 </div>
-              </React.Fragment>)}
-            </div>
-          </section>
-
-          {/* EDUCATION */}
-          <section id="education" className="section">
-            <div className="section-kicker">SYS.03 // EDUCATION</div>
-            <h2 className="section-title">Education</h2>
-            <div className="edu-grid">
-              <div className="edu-json">
-                <div><span className="edu-punct">{'{'}</span></div>
-                <div className="edu-field"><span className="edu-key">"institution"</span>: <span className="text-gold">"{education.institution}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"degree"</span>: <span className="text-gold">"{education.degree}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"focus"</span>: <span className="text-gold">"{education.focus}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"graduation"</span>: <span className="text-gold">"{education.graduation}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"honors"</span>: <span className="text-gold">"{education.honors}"</span>,</div>
-                <div className="edu-field"><span className="edu-key">"coursework"</span>: [</div>
-                {education.coursework.map((c, i) => <React.Fragment key={i}>
-                  <div className="edu-array-item"><span className="text-gold">"{c}"</span>,</div>
-                </React.Fragment>)}
-                <div className="edu-field">]</div>
-                <div><span className="edu-punct">{'}'}</span></div>
-              </div>
-              <div className="edu-gpa-col">
-                <div className="edu-gpa-label">GPA</div>
-                <div className="edu-gpa-row">
-                  <div className="edu-gpa-value">{education.gpa}</div>
-                </div>
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${education.gpaPct}%` }}></div>
-                </div>
               </div>
             </div>
           </section>
 
-          {/* PROJECTS */}
-          <section id="projects" className="section section--wide">
-            <div className="section-kicker">SYS.04 // PROJECTS</div>
-            <h2 className="section-title">Project Work</h2>
-            <div className="project-grid">
+          {/* EDUCATION — one-shot: the record reads out, then the coursework
+              lands. A <dl>, because these are key/value pairs and a screen reader
+              should hear them paired rather than as two unrelated columns. The
+              leader dots are a ::after on the <dt>, not an element between dt and
+              dd — a div inside a dl may only contain dt and dd, so a stray span
+              there is invalid and puts unassociated content in the list. */}
+          <section id="education" className="section pin-track" style={pEdu.trackStyle}>
+            <div className="pin-stage" style={pEdu.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.03 // EDUCATION</div>
+                <h2 className="section-title">Education</h2>
+                <div className="pin-step" data-pin={pEdu.at(0)} inert={pEdu.inert(0)}>
+                  <dl className="edu-readout">
+                    {[
+                      ['institution', education.institution],
+                      ['degree', education.degree],
+                      ['focus', education.focus],
+                      ['graduation', education.graduation],
+                      ['masters', education.masters],
+                      ['honors', education.honors]
+                    ].map(([label, value], i) => <React.Fragment key={label}>
+                      <div className="edu-row" style={{ '--i': i }}>
+                        <dt className="edu-label">{label}</dt>
+                        <dd className="edu-value">{value}</dd>
+                      </div>
+                    </React.Fragment>)}
+                  </dl>
 
-              {featuredProjects.map((proj, i) => <React.Fragment key={i}>
-                <div className="proj-card" role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} style={proj.heroStyle}>
+                  <div className="edu-course-block">
+                    <div className="skills-group-title edu-course-title">COURSEWORK</div>
+                    <div className="edu-course-grid">
+                      {education.coursework.map((c, i) => <React.Fragment key={c}>
+                        <div className="edu-course-chip" style={{ '--i': i }}>{c}</div>
+                      </React.Fragment>)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* PROJECTS — a rail. Scrolling down travels the row sideways; the card
+              on the left gutter — the same margin the kicker and title sit on —
+              is emphasised, and its neighbours stay visible either side, so
+              several are readable at once and it's obvious there's more.
+
+              .proj-rail is display:contents when the engine is off, which drops
+              the cards straight back into .project-grid as its own grid items —
+              the unpinned layout is then exactly what it always was. While pinned
+              it becomes the flex rail, and position:relative so measureRail()'s
+              offsetLeft reads are rail-relative.
+
+              Every index — rail position, dot, counter, focus — is the project's
+              index in `projects`, which is why the cards render in one pass. */}
+          <section id="projects" className="section section--wide pin-track" style={pProj.trackStyle}>
+            <div className="pin-stage" style={pProj.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.04 // PROJECTS</div>
+                <h2 className="section-title">Project Work</h2>
+                <div className="project-grid proj-rail-viewport" style={railStyle}>
+                <div className="proj-rail">
+
+              {/* One pass over `projects` in content order, branching on
+                  `featured`, rather than the featured list followed by the grid
+                  list. Those two orders happen to agree only while every featured
+                  project sits at the front of the array — add a featured one at
+                  the end and the rail's DOM order, the dot row's content order,
+                  and the counter all start pointing at different projects. One
+                  pass makes every index the same index by construction. */}
+              {projects.map((proj, i) => <React.Fragment key={proj.key}>
+                {proj.featured ? (
+                <div className="proj-card proj-card--featured" data-rail={railFocus === i ? 'focus' : 'off'} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} onFocus={() => this.scrollRailTo(i)} style={proj.heroStyle}>
                   <div style={proj.heroImgWrapStyle}>
-                    <img src={proj.image} alt={proj.imageAlt} className="proj-hero-img" />
+                    {proj.hasImage ? (
+                      <img src={proj.image} alt={proj.imageAlt} className="proj-hero-img" />
+                    ) : (
+                      <div className="proj-hero-img proj-pin-noimage-fill" aria-hidden="true" style={{ color: proj.dotColor }}>
+                        <span className="proj-pin-noimage-glyph">{'</>'}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="proj-hero-body">
                     <div className="proj-title-row">
@@ -867,20 +1471,26 @@ export default class Portfolio extends React.Component {
                         <span className="tag">{tag}</span>
                       </React.Fragment>)}
                     </div>
-                    <div className="proj-open-link" style={{ color: proj.dotColor }}>open details →</div>
+                    {/* <div className="proj-open-link" style={{ color: proj.dotColor }}>open details →</div> */}
                   </div>
                 </div>
-              </React.Fragment>)}
-
-              {gridProjects.map((proj, i) => <React.Fragment key={i}>
-                <div className="proj-card panel proj-grid-card" role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey}>
+                ) : (
+                <div className="proj-card panel proj-grid-card" data-rail={railFocus === i ? 'focus' : 'off'} role="button" tabIndex={0} onClick={proj.onOpen} onKeyDown={proj.onCardKey} onFocus={() => this.scrollRailTo(i)}>
                   <div className="proj-card-titlebar">
                     <div className="proj-dot-sm" style={{ background: proj.dotColor }}></div>
                     <div className="proj-card-title">{proj.name}</div>
                   </div>
                   {proj.hasImage ? <>
                     <img src={proj.image} alt={proj.imageAlt} className="proj-card-img" />
-                  </> : null}
+                  </> : <>
+                    {/* A project with no screenshot is fine on the grid — the card
+                        is just shorter. On a rail where every card is the same
+                        height it would read as a missing asset, so a stand-in
+                        holds the slot. Pin-only; display:none otherwise. */}
+                    <div className="proj-card-img proj-pin-noimage-fill" aria-hidden="true" style={{ color: proj.dotColor }}>
+                      <span className="proj-pin-noimage-glyph">{'</>'}</span>
+                    </div>
+                  </>}
                   <div className="proj-card-body">
                     <div className="proj-card-desc">{proj.desc}</div>
                     <div className="tag-row">
@@ -888,32 +1498,57 @@ export default class Portfolio extends React.Component {
                         <span className="tag">{tag}</span>
                       </React.Fragment>)}
                     </div>
-                    <div className="proj-open-link-sm" style={{ color: proj.dotColor }}>open details →</div>
+                    {/* <div className="proj-open-link-sm" style={{ color: proj.dotColor }}>open details →</div> */}
                   </div>
                 </div>
+                )}
               </React.Fragment>)}
 
+                </div>
+                </div>
+
+                {/* Position indicator, pin-only. One dot per project in its own
+                    colour plus a counter, both driven off the array, so adding a
+                    project extends them with no change here. */}
+                <div className="proj-pin-progress" aria-hidden="true">
+                  <div className="proj-pin-dots">
+                    {projects.map((proj, i) => <React.Fragment key={i}>
+                      <span className={railFocus === i ? 'proj-pin-dot is-active' : 'proj-pin-dot'} style={{ background: proj.dotColor }}></span>
+                    </React.Fragment>)}
+                  </div>
+                  <div className="proj-pin-counter">{projCounter} / {String(pProj.steps).padStart(2, '0')}</div>
+                </div>
+
+              </div>
             </div>
           </section>
 
 
-          {/* SKILLS */}
-          <section id="skills" className="section">
-            <div className="section-kicker">SYS.05 // SKILLS</div>
-            <h2 className="section-title section-title--tight">Skills</h2>
-            <div className="skills-blurb">{skillsBlurb}</div>
+          {/* SKILLS — accumulate: three groups in turn, chips staggering within
+              each. Stagger inside one list is legitimate; it's the same entrance
+              on every section that reads as generated. */}
+          <section id="skills" className="section pin-track" style={pSkills.trackStyle}>
+            <div className="pin-stage" style={pSkills.stageStyle}>
+              <div className="pin-inner">
+                <div className="section-kicker">SYS.05 // SKILLS</div>
+                <h2 className="section-title section-title--tight">Skills</h2>
+                <div className="skills-blurb">{skillsBlurb}</div>
 
-            <div className="skills-groups">
-              {skills.map((g, i) => <React.Fragment key={i}>
-                <div>
-                  <div className="skills-group-title">{g.title}</div>
-                  <div className="tag-row">
-                    {g.items.map((s, j) => <React.Fragment key={j}>
-                      <span className="skill-chip">{s}</span>
-                    </React.Fragment>)}
-                  </div>
+                {/* One step for the section now, not one per group. --g sequences
+                    the groups; --i staggers the chips inside each. */}
+                <div className="skills-groups pin-step" data-pin={pSkills.at(0)} inert={pSkills.inert(0)}>
+                  {skills.map((g, i) => <React.Fragment key={i}>
+                    <div className="skills-step" style={{ '--g': i }}>
+                      <div className="skills-group-title">{g.title}</div>
+                      <div className="tag-row">
+                        {g.items.map((s, j) => <React.Fragment key={j}>
+                          <span className="skill-chip" style={{ '--i': j }}>{s}</span>
+                        </React.Fragment>)}
+                      </div>
+                    </div>
+                  </React.Fragment>)}
                 </div>
-              </React.Fragment>)}
+              </div>
             </div>
           </section>
 
@@ -1007,25 +1642,28 @@ export default class Portfolio extends React.Component {
                 <div className="modal-year">{modal.year}</div>
                 <button className="modal-close" aria-label="Close" onClick={modal.close}>×</button>
               </div>
-              {modal.hasImage ? <>
-                <img src={modal.image} alt={modal.imageAlt} className="modal-img" />
-              </> : null}
-              <div className="modal-body">
-                <p className="modal-desc">{modal.longDesc}</p>
-                <div className="modal-section-label">WHAT'S IN IT</div>
-                <div className="modal-highlights">
-                  {modal.highlights.map((h, i) => <React.Fragment key={i}>
-                    <div className="modal-highlight">
-                      <span className="bullet-marker">›</span>{h}
-                    </div>
-                  </React.Fragment>)}
+              <div className="modal-scroll">
+                {modal.hasImage ? <>
+                  <img src={modal.image} alt={modal.imageAlt} className="modal-img" />
+                </> : null}
+                <div className="modal-body">
+                  <p className="modal-card-desc">{modal.desc}</p>
+                  <p className="modal-desc">{modal.longDesc}</p>
+                  <div className="modal-section-label">WHAT'S IN IT</div>
+                  <div className="modal-highlights">
+                    {modal.highlights.map((h, i) => <React.Fragment key={i}>
+                      <div className="modal-highlight">
+                        <span className="bullet-marker">›</span>{h}
+                      </div>
+                    </React.Fragment>)}
+                  </div>
+                  <div className="modal-tags">
+                    {modal.tags.map((tag, i) => <React.Fragment key={i}>
+                      <span className="tag--modal">{tag}</span>
+                    </React.Fragment>)}
+                  </div>
+                  <a href={modal.link} className="modal-cta">view source →</a>
                 </div>
-                <div className="modal-tags">
-                  {modal.tags.map((tag, i) => <React.Fragment key={i}>
-                    <span className="tag--modal">{tag}</span>
-                  </React.Fragment>)}
-                </div>
-                <a href={modal.link} className="modal-cta">view source →</a>
               </div>
             </div>
           </div>

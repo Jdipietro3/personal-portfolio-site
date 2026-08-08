@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Placeholder artwork: a spreadsheet grid of classes flowing into a weekly calendar">
+  <rect width="800" height="450" fill="#0e0e11"/>
+  <g fill="none" stroke="#f2f1ec" stroke-opacity="0.14" stroke-width="1.5">
+    <rect x="100" y="120" width="220" height="210" rx="6"/>
+    <line x1="100" y1="162" x2="320" y2="162"/>
+    <line x1="100" y1="204" x2="320" y2="204"/>
+    <line x1="100" y1="246" x2="320" y2="246"/>
+    <line x1="100" y1="288" x2="320" y2="288"/>
+    <line x1="173" y1="120" x2="173" y2="330"/>
+    <line x1="246" y1="120" x2="246" y2="330"/>
+  </g>
+  <g fill="#fff3d0" fill-opacity="0.35">
+    <rect x="108" y="130" width="57" height="24" rx="3"/>
+    <rect x="181" y="172" width="57" height="24" rx="3"/>
+    <rect x="254" y="214" width="57" height="24" rx="3"/>
+    <rect x="108" y="256" width="57" height="24" rx="3"/>
+    <rect x="181" y="298" width="57" height="24" rx="3"/>
+  </g>
+  <g stroke="#f8d488" stroke-opacity="0.35" stroke-width="1.5" fill="none">
+    <path d="M340 225h90"/>
+    <path d="M410 205l20 20-20 20"/>
+  </g>
+  <g fill="none" stroke="#f2f1ec" stroke-opacity="0.14" stroke-width="1.5">
+    <rect x="460" y="110" width="260" height="230" rx="6"/>
+    <line x1="460" y1="150" x2="720" y2="150"/>
+    <line x1="497" y1="150" x2="497" y2="340"/>
+    <line x1="534" y1="150" x2="534" y2="340"/>
+    <line x1="571" y1="150" x2="571" y2="340"/>
+    <line x1="608" y1="150" x2="608" y2="340"/>
+    <line x1="645" y1="150" x2="645" y2="340"/>
+    <line x1="682" y1="150" x2="682" y2="340"/>
+  </g>
+  <g fill="#f8d488" fill-opacity="0.55">
+    <rect x="500" y="168" width="30" height="26" rx="3"/>
+    <rect x="574" y="196" width="30" height="50" rx="3"/>
+    <rect x="648" y="168" width="30" height="70" rx="3"/>
+    <rect x="537" y="252" width="30" height="26" rx="3"/>
+    <rect x="611" y="280" width="30" height="40" rx="3"/>
+  </g>
+  <text x="40" y="410" fill="#f2f1ec" fill-opacity="0.32" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="19">workday-to-outlook</text>
+</svg>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Placeholder artwork: a chat prompt on the left resolving into a trained model diagram on the right">
+  <rect width="800" height="450" fill="#0e0e11"/>
+  <g fill="none" stroke="#f8d488" stroke-opacity="0.16" stroke-width="1.5">
+    <path d="M290 225h60"/>
+    <path d="M470 150l-100 75 100 75"/>
+  </g>
+  <g>
+    <rect x="70" y="120" width="200" height="46" rx="10" fill="#f8d488" fill-opacity="0.12" stroke="#f8d488" stroke-opacity="0.4" stroke-width="1.5"/>
+    <text x="90" y="149" fill="#f2f1ec" fill-opacity="0.55" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="14">"predict churn from…"</text>
+    <rect x="110" y="184" width="150" height="40" rx="10" fill="#0e0e11" stroke="#f2f1ec" stroke-opacity="0.18" stroke-width="1.5"/>
+    <text x="128" y="209" fill="#f2f1ec" fill-opacity="0.4" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="13">profile data</text>
+    <rect x="80" y="248" width="150" height="40" rx="10" fill="#0e0e11" stroke="#f2f1ec" stroke-opacity="0.18" stroke-width="1.5"/>
+    <text x="98" y="273" fill="#f2f1ec" fill-opacity="0.4" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="13">pick methodology</text>
+  </g>
+  <g stroke="#f8d488" stroke-opacity="0.25" stroke-width="1.5">
+    <line x1="560" y1="150" x2="480" y2="220"/>
+    <line x1="560" y1="150" x2="560" y2="230"/>
+    <line x1="560" y1="150" x2="640" y2="220"/>
+    <line x1="480" y1="220" x2="520" y2="300"/>
+    <line x1="560" y1="230" x2="520" y2="300"/>
+    <line x1="560" y1="230" x2="600" y2="300"/>
+    <line x1="640" y1="220" x2="600" y2="300"/>
+  </g>
+  <g fill="#0e0e11" stroke="#f8d488" stroke-opacity="0.55" stroke-width="1.5">
+    <circle cx="480" cy="220" r="9"/>
+    <circle cx="560" cy="230" r="9"/>
+    <circle cx="640" cy="220" r="9"/>
+    <circle cx="520" cy="300" r="9"/>
+    <circle cx="600" cy="300" r="9"/>
+  </g>
+  <circle cx="560" cy="150" r="17" fill="#f8d488" fill-opacity="0.18" stroke="#f8d488" stroke-width="2"/>
+  <path d="M690 130l6 60M660 160h60" stroke="#fff3d0" stroke-opacity="0.5" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="40" y="410" fill="#f2f1ec" fill-opacity="0.32" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="19">model-builder</text>
+</svg>

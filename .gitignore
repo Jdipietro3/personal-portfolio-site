@@ -1,2 +1,5 @@
 node_modules/
 dist/
+
+# Agent worktrees — transient, never part of a commit.
+.claude/worktrees/

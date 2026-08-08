@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Joseph DiPietro — Computer Science</title>
 <meta name="description" content="Joseph DiPietro — Computer Science student working in systems and AI. Compilers, distributed systems, and machine learning projects.">
+<!-- gstatic serves the woff2 itself and is where the latency is, but the browser
+     can't discover that URL until the googleapis CSS comes back — so connecting
+     to both up front is what actually shortens the swap window. crossorigin
+     belongs on gstatic only: the fonts are fetched CORS-mode, the stylesheet is
+     not, and a mismatched attribute opens a second wasted connection. -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap">
 </head>
 <body>
