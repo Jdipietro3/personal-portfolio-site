@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Placeholder artwork: a musical staff with notes flowing into a recurrent neural network">
+  <rect width="800" height="450" fill="#0e0e11"/>
+  <g stroke="#fff3d0" stroke-opacity="0.16" stroke-width="1.5">
+    <line x1="80" y1="130" x2="300" y2="130"/>
+    <line x1="80" y1="150" x2="300" y2="150"/>
+    <line x1="80" y1="170" x2="300" y2="170"/>
+    <line x1="80" y1="190" x2="300" y2="190"/>
+    <line x1="80" y1="210" x2="300" y2="210"/>
+  </g>
+  <g fill="#fff3d0" fill-opacity="0.55">
+    <circle cx="110" cy="190" r="7"/>
+    <circle cx="150" cy="150" r="7"/>
+    <circle cx="190" cy="170" r="7"/>
+    <circle cx="230" cy="130" r="7"/>
+    <circle cx="270" cy="210" r="7"/>
+  </g>
+  <g stroke="#fff3d0" stroke-opacity="0.5" stroke-width="1.5">
+    <line x1="117" y1="190" x2="117" y2="150"/>
+    <line x1="157" y1="150" x2="157" y2="110"/>
+    <line x1="197" y1="170" x2="197" y2="130"/>
+    <line x1="237" y1="130" x2="237" y2="90"/>
+    <line x1="277" y1="210" x2="277" y2="170"/>
+  </g>
+  <g stroke="#f8d488" stroke-opacity="0.3" stroke-width="1.5" fill="none">
+    <path d="M320 170h50"/>
+  </g>
+  <g stroke="#f8d488" stroke-opacity="0.25" stroke-width="1.5">
+    <line x1="440" y1="140" x2="520" y2="110"/>
+    <line x1="440" y1="140" x2="520" y2="170"/>
+    <line x1="440" y1="200" x2="520" y2="110"/>
+    <line x1="440" y1="200" x2="520" y2="170"/>
+    <line x1="440" y1="260" x2="520" y2="170"/>
+    <line x1="440" y1="260" x2="520" y2="230"/>
+    <line x1="520" y1="110" x2="600" y2="140"/>
+    <line x1="520" y1="170" x2="600" y2="140"/>
+    <line x1="520" y1="170" x2="600" y2="200"/>
+    <line x1="520" y1="230" x2="600" y2="200"/>
+  </g>
+  <g fill="#0e0e11" stroke="#f8d488" stroke-opacity="0.5" stroke-width="1.5">
+    <circle cx="440" cy="140" r="7"/>
+    <circle cx="440" cy="200" r="7"/>
+    <circle cx="440" cy="260" r="7"/>
+    <circle cx="520" cy="110" r="7"/>
+    <circle cx="520" cy="170" r="7"/>
+    <circle cx="520" cy="230" r="7"/>
+    <circle cx="600" cy="140" r="7"/>
+    <circle cx="600" cy="200" r="7"/>
+  </g>
+  <path d="M700 130a45 45 0 1 1 -1 -0.5" fill="none" stroke="#f8d488" stroke-opacity="0.3" stroke-width="1.5" marker-end="url(#rnnLoopHead)"/>
+  <defs>
+    <marker id="rnnLoopHead" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <path d="M0 0l8 4-8 4z" fill="#f8d488" fill-opacity="0.5"/>
+    </marker>
+  </defs>
+  <text x="40" y="410" fill="#f2f1ec" fill-opacity="0.32" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="19">rnn-pop-generator</text>
+</svg>

@@ -260,15 +260,17 @@ a:hover { color: #ffb37a; }
 
 /* --- project modal --- */
 .modal-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(6,6,8,0.82); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; }
-.modal-dialog { background: #0e0e11; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; max-width: 760px; width: 100%; max-height: 86vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,0.6); }
-.modal-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.08); background: #131316; position: sticky; top: 0; }
+.modal-dialog { background: #0e0e11; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; max-width: 760px; width: 100%; max-height: 86vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 80px rgba(0,0,0,0.6); }
+.modal-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.08); background: #131316; flex: none; }
 .modal-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .modal-title { font-size: 14px; font-weight: 700; color: #f2f1ec; }
 .modal-year { font-size: 11px; color: rgba(242,241,236,0.35); }
 .modal-close { cursor: pointer; background: none; border: 0; color: rgba(242,241,236,0.5); font-size: 22px; line-height: 1; padding: 4px 8px; font-family: inherit; margin-left: auto; }
 .modal-close:hover { color: #f8d488; }
+.modal-scroll { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .modal-img { width: 100%; display: block; border-bottom: 1px solid rgba(255,255,255,0.08); }
 .modal-body { padding: 26px; }
+.modal-card-desc { margin: 0 0 14px; font-size: 15.5px; font-weight: 600; line-height: 1.6; color: #f2f1ec; }
 .modal-desc { margin: 0; font-size: 14.5px; line-height: 1.8; color: rgba(242,241,236,0.85); }
 .modal-section-label { font-size: 11px; letter-spacing: 0.16em; color: #f8d488; opacity: 0.8; margin: 26px 0 12px; }
 .modal-highlights { display: flex; flex-direction: column; gap: 8px; }

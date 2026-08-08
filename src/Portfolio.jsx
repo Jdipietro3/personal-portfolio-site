@@ -1020,7 +1020,7 @@ export default class Portfolio extends React.Component {
 
     const openProj = this.state.openProject != null ? projects.find((p) => p.key === this.state.openProject) : null;
     const modal = openProj ? {
-      name: openProj.name, longDesc: openProj.longDesc, highlights: openProj.highlights, tags: openProj.tags,
+      name: openProj.name, desc: openProj.desc, longDesc: openProj.longDesc, highlights: openProj.highlights, tags: openProj.tags,
       link: openProj.link, image: openProj.image, imageAlt: openProj.imageAlt, year: openProj.year,
       dotColor: openProj.dotColor, hasImage: openProj.hasImage,
       close: () => this.closeProjectModal(),
@@ -1034,6 +1034,7 @@ export default class Portfolio extends React.Component {
     const education = CONTENT.education;
     const about = CONTENT.about;
     const contact = CONTENT.contact;
+    const hero = CONTENT.hero;
 
     // --- search ---
     // Everything below is pure formatting. The {{ }} evaluator has no arithmetic,
@@ -1224,7 +1225,7 @@ export default class Portfolio extends React.Component {
 
         <div style={subStyle}>
           <div className="hero-stack">
-            <div className="hero-badge">&gt;&gt; class: computer_science <span className="text-gold">//</span> track: systems + AI</div>
+            <div className="hero-badge">&gt;&gt; class: {hero.classLabel} <span className="text-gold">//</span> track: {hero.track}</div>
 
             <button className="search-trigger search-trigger-hero" onClick={openSearchFromHero} aria-label="Search this site" aria-keyshortcuts="Control+K Meta+K" style={heroSearchStyle}>
               <span aria-hidden="true" className="hero-search-chevron">&gt;</span>
@@ -1395,6 +1396,7 @@ export default class Portfolio extends React.Component {
                       ['degree', education.degree],
                       ['focus', education.focus],
                       ['graduation', education.graduation],
+                      ['masters', education.masters],
                       ['honors', education.honors]
                     ].map(([label, value], i) => <React.Fragment key={label}>
                       <div className="edu-row" style={{ '--i': i }}>
@@ -1469,7 +1471,7 @@ export default class Portfolio extends React.Component {
                         <span className="tag">{tag}</span>
                       </React.Fragment>)}
                     </div>
-                    <div className="proj-open-link" style={{ color: proj.dotColor }}>open details →</div>
+                    {/* <div className="proj-open-link" style={{ color: proj.dotColor }}>open details →</div> */}
                   </div>
                 </div>
                 ) : (
@@ -1496,7 +1498,7 @@ export default class Portfolio extends React.Component {
                         <span className="tag">{tag}</span>
                       </React.Fragment>)}
                     </div>
-                    <div className="proj-open-link-sm" style={{ color: proj.dotColor }}>open details →</div>
+                    {/* <div className="proj-open-link-sm" style={{ color: proj.dotColor }}>open details →</div> */}
                   </div>
                 </div>
                 )}
@@ -1640,25 +1642,28 @@ export default class Portfolio extends React.Component {
                 <div className="modal-year">{modal.year}</div>
                 <button className="modal-close" aria-label="Close" onClick={modal.close}>×</button>
               </div>
-              {modal.hasImage ? <>
-                <img src={modal.image} alt={modal.imageAlt} className="modal-img" />
-              </> : null}
-              <div className="modal-body">
-                <p className="modal-desc">{modal.longDesc}</p>
-                <div className="modal-section-label">WHAT'S IN IT</div>
-                <div className="modal-highlights">
-                  {modal.highlights.map((h, i) => <React.Fragment key={i}>
-                    <div className="modal-highlight">
-                      <span className="bullet-marker">›</span>{h}
-                    </div>
-                  </React.Fragment>)}
+              <div className="modal-scroll">
+                {modal.hasImage ? <>
+                  <img src={modal.image} alt={modal.imageAlt} className="modal-img" />
+                </> : null}
+                <div className="modal-body">
+                  <p className="modal-card-desc">{modal.desc}</p>
+                  <p className="modal-desc">{modal.longDesc}</p>
+                  <div className="modal-section-label">WHAT'S IN IT</div>
+                  <div className="modal-highlights">
+                    {modal.highlights.map((h, i) => <React.Fragment key={i}>
+                      <div className="modal-highlight">
+                        <span className="bullet-marker">›</span>{h}
+                      </div>
+                    </React.Fragment>)}
+                  </div>
+                  <div className="modal-tags">
+                    {modal.tags.map((tag, i) => <React.Fragment key={i}>
+                      <span className="tag--modal">{tag}</span>
+                    </React.Fragment>)}
+                  </div>
+                  <a href={modal.link} className="modal-cta">view source →</a>
                 </div>
-                <div className="modal-tags">
-                  {modal.tags.map((tag, i) => <React.Fragment key={i}>
-                    <span className="tag--modal">{tag}</span>
-                  </React.Fragment>)}
-                </div>
-                <a href={modal.link} className="modal-cta">view source →</a>
               </div>
             </div>
           </div>
